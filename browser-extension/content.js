@@ -127,6 +127,7 @@
     "engine/blocklist.js",
     "engine/user-force-mask.js",
     "engine/onnx-detector.js",
+    "engine/confidential.js",
     "engine/surrogates.js",
     "engine/llm-prompts.js",
     "engine/engine.js",

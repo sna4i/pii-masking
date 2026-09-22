@@ -1,0 +1,66 @@
+{
+  "label_groups": ["COMPANY", "IP_ADDRESS", "URL", "PHONE_NUMBER", "SECRET"],
+  "cases": [
+    {
+      "name": "COMPANY stops at the legal form, not the following noun",
+      "input": "株式会社設立の件について",
+      "expected_absent": [{ "label": "COMPANY", "text": "株式会社設立" }]
+    },
+    {
+      "name": "COMPANY still captures a real name after the legal form",
+      "input": "株式会社アクメの件",
+      "expected": [{ "label": "COMPANY", "text": "株式会社アクメ" }]
+    },
+    {
+      "name": "IP_ADDRESS rejects out-of-range octets",
+      "input": "サーバーは 999.888.777.666 です",
+      "expected_absent": [{ "label": "IP_ADDRESS" }]
+    },
+    {
+      "name": "IP_ADDRESS rejects a version string",
+      "input": "Node v22.16.0 を使用",
+      "expected_absent": [{ "label": "IP_ADDRESS" }]
+    },
+    {
+      "name": "IP_ADDRESS still matches a valid address",
+      "input": "接続先は 192.168.10.1 です",
+      "expected": [{ "label": "IP_ADDRESS", "text": "192.168.10.1" }]
+    },
+    {
+      "name": "URL drops a trailing sentence period",
+      "input": "詳細は https://example.com/a. を参照",
+      "expected": [{ "label": "URL", "text": "https://example.com/a" }]
+    },
+    {
+      "name": "URL drops a trailing ASCII close paren",
+      "input": "(https://example.com/x) を確認",
+      "expected": [{ "label": "URL", "text": "https://example.com/x" }]
+    },
+    {
+      "name": "URL keeps a real path",
+      "input": "https://example.com/a/b?c=1 を開く",
+      "expected": [{ "label": "URL", "text": "https://example.com/a/b?c=1" }]
+    },
+    {
+      "name": "PHONE_NUMBER rejects mismatched brackets",
+      "input": "電話 03-1234)5678 です",
+      "expected_absent": [{ "label": "PHONE_NUMBER" }]
+    },
+    {
+      "name": "PHONE_NUMBER accepts matched brackets",
+      "input": "電話 03(1234)5678 です",
+      "expected": [{ "label": "PHONE_NUMBER", "text": "03(1234)5678" }]
+    },
+    {
+      "name": "PHONE_NUMBER accepts hyphens",
+      "input": "電話 03-1234-5678 です",
+      "expected": [{ "label": "PHONE_NUMBER", "text": "03-1234-5678" }]
+    },
+    {
+      "name": "private key survives disabling the API_KEY group",
+      "input": "-----BEGIN RSA PRIVATE KEY-----\nMIIEabcdef\n-----END RSA PRIVATE KEY-----",
+      "expected": [{ "label": "SECRET" }],
+      "disabled_categories": ["API_KEY"]
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "label_groups": ["JP_SURNAME", "KATAKANA_NAME", "COMPANY_ABBREV"],
+  "cases": [
+    {
+      "name": "full name is one span, not just the surname",
+      "input": "田中太郎さんと山田花子さんが参加",
+      "expected": [
+        { "label": "JP_SURNAME", "text": "田中太郎" },
+        { "label": "JP_SURNAME", "text": "山田花子" }
+      ]
+    },
+    {
+      "name": "katakana given name after a surname",
+      "input": "佐藤ミカ様へご連絡",
+      "expected": [{ "label": "JP_SURNAME", "text": "佐藤ミカ" }]
+    },
+    {
+      "name": "role title is not absorbed into the name",
+      "input": "田中部長から連絡がありました",
+      "expected": [{ "label": "JP_SURNAME", "text": "田中" }]
+    },
+    {
+      "name": "company starting with a surname is not a person",
+      "input": "山田電機は好調です",
+      "expected_absent": [{ "label": "JP_SURNAME", "text": "山田電機" }]
+    },
+    {
+      "name": "katakana name with a middle dot",
+      "input": "マイケル・ジョーダン氏の講演",
+      "expected": [{ "label": "KATAKANA_NAME", "text": "マイケル・ジョーダン" }]
+    },
+    {
+      "name": "katakana name before an honorific",
+      "input": "ジョンソン部長に確認します",
+      "expected": [{ "label": "KATAKANA_NAME", "text": "ジョンソン" }]
+    },
+    {
+      "name": "katakana name after a declaring cue",
+      "input": "氏名: タナカタロウ",
+      "expected": [{ "label": "KATAKANA_NAME", "text": "タナカタロウ" }]
+    },
+    {
+      "name": "negative — loanwords are not names",
+      "input": "サーバーのリリースはコンテナでデプロイする",
+      "expected_absent": [{ "label": "KATAKANA_NAME" }]
+    },
+    {
+      "name": "negative — loanword before a particle is not a name",
+      "input": "アプリケーションのインストール手順",
+      "expected_absent": [{ "label": "KATAKANA_NAME" }]
+    },
+    {
+      "name": "negative — blocklisted word before an honorific",
+      "input": "マネージャーさんに確認",
+      "expected_absent": [{ "label": "KATAKANA_NAME" }]
+    },
+    {
+      "name": "abbreviated company references",
+      "input": "A社とB社の比較、甲社・乙社も検討",
+      "expected": [
+        { "label": "COMPANY_ABBREV", "text": "A社" },
+        { "label": "COMPANY_ABBREV", "text": "B社" },
+        { "label": "COMPANY_ABBREV", "text": "甲社" },
+        { "label": "COMPANY_ABBREV", "text": "乙社" }
+      ]
+    },
+    {
+      "name": "negative — 当社 / 貴社 / 会社 are not abbreviations",
+      "input": "当社の方針と貴社のご要望、会社の規定",
+      "expected_absent": [{ "label": "COMPANY_ABBREV" }]
+    }
+  ]
+}

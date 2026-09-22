@@ -9,6 +9,9 @@
     "credential",
     "attribute",
     "other",
+    // 文単位の「意味として機密」判定 (confidential.js)。
+    // span 検出ではないので既存クラスに混ぜず独立させる。
+    "semantic",
   ];
 
   const LABEL_TO_CLASSIFICATION = {
@@ -23,6 +26,7 @@
     ORGANIZATION: "proper_noun",
     PROPER_NOUN_ORG: "proper_noun",
     COMPANY: "proper_noun",
+    COMPANY_ABBREV: "proper_noun",
     // ---- contact --------------------------------------------------------
     EMAIL_ADDRESS: "contact",
     PHONE_NUMBER: "contact",
@@ -45,6 +49,20 @@
     INTERNAL_ID: "identifier",
     DEPARTMENT: "identifier",
     // USER_DEFINED_* — classification は category 系統を踏襲。
+    BUSINESS_CONFIDENTIAL: "semantic",
+    CORPORATE_NUMBER: "identifier",
+    INVOICE_REG_NUMBER: "identifier",
+    MAC_ADDRESS: "identifier",
+    IP_CIDR: "identifier",
+    INTERNAL_HOSTNAME: "identifier",
+    IBAN: "credential",
+    US_SSN: "credential",
+    UK_NINO: "credential",
+    CRYPTO_ADDRESS: "credential",
+    EMAIL_HEADER: "contact",
+    COOKIE_HEADER: "credential",
+    LOCAL_USER_PATH: "identifier",
+    PII_JSON_FIELD: "contact",
     USER_DEFINED_PERSON: "proper_noun",
     USER_DEFINED_LOCATION: "contact",
     USER_DEFINED_ORGANIZATION: "proper_noun",

@@ -4,7 +4,11 @@
   "version": "1.4.0",
   "version_name": "0.5.1-dev",
   "description": "PII masking + optional local LLM proxy. Dev build (not for Web Store).",
-  "permissions": ["storage", "activeTab", "offscreen"],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "offscreen"
+  ],
   "host_permissions": [
     "https://claude.ai/*",
     "https://*.claude.com/*",
@@ -34,7 +38,9 @@
         "https://gemini.google.com/*",
         "https://*.manus.im/*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_start"
     }
   ],
@@ -58,6 +64,7 @@
         "engine/surrogates.js",
         "engine/llm-prompts.js",
         "engine/onnx-detector.js",
+        "engine/confidential.js",
         "vendor/transformers/transformers.min.js",
         "vendor/transformers/ort-wasm-simd-threaded.jsep.mjs",
         "vendor/transformers/ort-wasm-simd-threaded.jsep.wasm"
