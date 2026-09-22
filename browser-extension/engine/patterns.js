@@ -63,7 +63,13 @@
     // マイナンバー / 口座 / 免許 / パスポート
     MY_NUMBER: [T("MY_NUMBER", /\b\d{4}\s*\d{4}\s*\d{4}\b/gu)],
     BANK_ACCOUNT: [T("BANK_ACCOUNT", /(?:普通|当座|貯蓄)\s*(?:口座)?\s*(?:番号)?\s*[:：]?\s*\d{6,8}/gu)],
-    DRIVERS_LICENSE: [T("DRIVERS_LICENSE", /\b\d{2}\s*-?\s*\d{2}\s*-?\s*\d{6}\s*-?\s*\d{2}\b/gu)],
+    // 運転免許証番号 — 12 桁。区切りを必須にしている点が重要で、以前は
+    // 全ての区切りが optional だったため実質 /\b\d{12}\b/ に退化し、
+    // マイナンバー (同じ 12 桁) と完全に同一 span を取り合っていた。
+    // 同一 span を 2 ラベルが取ると maskAggregated と maskSanitize で
+    // tie-break がずれ、サイドバーの表示と実際に送信される文字列が
+    // 食い違う。区切り無しの 12 桁は MY_NUMBER に委ねる。
+    DRIVERS_LICENSE: [T("DRIVERS_LICENSE", /\b\d{2}[\s-]\d{2}[\s-]\d{6}[\s-]\d{2}\b/gu)],
     PASSPORT: [T("PASSPORT", /\b[A-Z]{2}\d{7}\b/gu)],
     // DB 接続 / API キー / シークレット
     DB_CONNECTION: [

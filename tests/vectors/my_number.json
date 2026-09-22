@@ -1,20 +1,41 @@
 {
-  "label_groups": ["MY_NUMBER"],
+  "label_groups": [
+    "MY_NUMBER"
+  ],
   "cases": [
     {
       "name": "12-digit with spaces",
       "input": "マイナンバーは 1234 5678 9012 です",
-      "expected": [{ "label": "MY_NUMBER", "text": "1234 5678 9012" }]
+      "expected": [
+        {
+          "label": "MY_NUMBER",
+          "text": "1234 5678 9012"
+        }
+      ]
     },
     {
       "name": "12-digit packed",
       "input": "番号: 123456789012 を入力",
-      "expected": [{ "label": "MY_NUMBER", "text": "123456789012" }]
+      "expected": [
+        {
+          "label": "MY_NUMBER",
+          "text": "123456789012"
+        }
+      ],
+      "expected_absent": [
+        {
+          "label": "DRIVERS_LICENSE"
+        }
+      ]
     },
     {
       "name": "negative — only 11 digits",
       "input": "id 12345678901 (短い)",
-      "expected_absent": [{ "label": "MY_NUMBER" }]
+      "expected_absent": [
+        {
+          "label": "MY_NUMBER"
+        }
+      ]
     }
   ]
 }

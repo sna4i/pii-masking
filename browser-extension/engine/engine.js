@@ -62,18 +62,41 @@
     return out;
   }
 
-  // Sweep-line overlap resolver — mirror of _resolve_overlaps.
+  // Sweep-line overlap resolver.
+  //
+  // Returns a set of spans that never intersect, so every downstream
+  // consumer (aggregateDetections, applyTagMask, the sidebar) sees the
+  // same non-overlapping view of the text.
+  //
+  // Ordering decides which span survives a conflict:
+  //   1. leftmost start
+  //   2. longest span — the fuller entity beats the fragment, so ML's
+  //      「山田太郎」 wins over the surname dictionary's 「山田」.
+  //      Score deliberately does NOT outrank length here: regex/dict
+  //      detections are hardcoded to 1.0 (collectDetections) while ML
+  //      forwards a softmax < 1.0 (onnx-detector.js), so ranking by
+  //      score would always shrink a full name back to its fragment.
+  //   3. higher score, then entity_type — only to make the outcome
+  //      deterministic when two rules match the exact same span
+  //      (e.g. a bare 12-digit run is both MY_NUMBER and
+  //      DRIVERS_LICENSE). Without a total order the two entry points
+  //      can disagree on the label for one span.
   function resolveOverlaps(results) {
     if (results.length < 2) return results.slice();
-    const ordered = results.slice().sort((a, b) => a.start - b.start || b.end - a.end);
+    const ordered = results.slice().sort(
+      (a, b) =>
+        a.start - b.start ||
+        (b.end - b.start) - (a.end - a.start) ||
+        b.score - a.score ||
+        (a.entity_type < b.entity_type ? -1 : a.entity_type > b.entity_type ? 1 : 0),
+    );
     const keep = [];
-    let eS = -1, eE = -1, eSc = -1;
+    let lastEnd = -1;
     for (const c of ordered) {
-      if (eE >= c.end && eSc >= c.score && (eS < c.start || eE > c.end)) continue;
+      // Spans are half-open [start, end): touching is not overlapping.
+      if (c.start < lastEnd) continue;
       keep.push(c);
-      if (c.end > eE || (c.end === eE && c.score > eSc)) {
-        eS = c.start; eE = c.end; eSc = c.score;
-      }
+      lastEnd = c.end;
     }
     return keep;
   }
