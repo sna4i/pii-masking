@@ -1,0 +1,52 @@
+{
+  "label_groups": ["CREDIT_CARD"],
+  "cases": [
+    {
+      "name": "Visa — hyphenated",
+      "input": "カード番号 4111-1111-1111-1111 で決済",
+      "expected": [{ "label": "CREDIT_CARD", "text": "4111-1111-1111-1111" }],
+      "expected_absent": [{ "label": "POSTAL_CODE" }]
+    },
+    {
+      "name": "Visa — space separated",
+      "input": "カード番号 4111 1111 1111 1111 で決済",
+      "expected": [{ "label": "CREDIT_CARD", "text": "4111 1111 1111 1111" }],
+      "expected_absent": [{ "label": "MY_NUMBER" }]
+    },
+    {
+      "name": "Visa — unseparated",
+      "input": "カード番号 4111111111111111 で決済",
+      "expected": [{ "label": "CREDIT_CARD", "text": "4111111111111111" }]
+    },
+    {
+      "name": "Mastercard",
+      "input": "5500 0000 0000 0004 を登録",
+      "expected": [{ "label": "CREDIT_CARD", "text": "5500 0000 0000 0004" }]
+    },
+    {
+      "name": "American Express — 15 digits",
+      "input": "AMEX 3782 822463 10005 です",
+      "expected": [{ "label": "CREDIT_CARD", "text": "3782 822463 10005" }]
+    },
+    {
+      "name": "JCB",
+      "input": "3530111333300000 で支払い",
+      "expected": [{ "label": "CREDIT_CARD", "text": "3530111333300000" }]
+    },
+    {
+      "name": "negative — fails the Luhn check",
+      "input": "参照番号 4111111111111112 を確認",
+      "expected_absent": [{ "label": "CREDIT_CARD" }]
+    },
+    {
+      "name": "negative — 12-digit My Number is not a card",
+      "input": "マイナンバーは 123456789012 です",
+      "expected_absent": [{ "label": "CREDIT_CARD" }]
+    },
+    {
+      "name": "negative — postal code stays a postal code",
+      "input": "〒150-0001 渋谷区",
+      "expected_absent": [{ "label": "CREDIT_CARD" }]
+    }
+  ]
+}

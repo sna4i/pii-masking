@@ -12,8 +12,31 @@
       ? (() => { try { return require("./dictionaries.js"); } catch (_) { return null; } })()
       : (root && root.__localMaskMCP && root.__localMaskMCP.engine && root.__localMaskMCP.engine.dictionaries) || null;
 
-  // Shorthand so the table below stays readable.
-  const T = (entity_type, pattern) => ({ entity_type, pattern });
+  // Shorthand so the table below stays readable. ``validate`` is
+  // optional: when present, collectDetections drops a match for which it
+  // returns false. Needed where a regex cannot express the constraint —
+  // card numbers carry a check digit, and without verifying it a 16-digit
+  // order number masks as a credit card.
+  const T = (entity_type, pattern, validate) =>
+    validate ? { entity_type, pattern, validate } : { entity_type, pattern };
+
+  // Luhn (ISO/IEC 7812-1) check digit — every payment card carries one.
+  function luhnValid(surface) {
+    const digits = surface.replace(/\D/g, "");
+    if (digits.length < 13 || digits.length > 19) return false;
+    let sum = 0;
+    let double = false;
+    for (let i = digits.length - 1; i >= 0; i--) {
+      let d = digits.charCodeAt(i) - 48;
+      if (double) {
+        d *= 2;
+        if (d > 9) d -= 9;
+      }
+      sum += d;
+      double = !double;
+    }
+    return sum % 10 === 0;
+  }
 
   const BUILTIN_PATTERNS = {
     // 都道府県+市区町村 単体 (兵庫県明石市 / 東京都渋谷区 など)。
@@ -60,6 +83,28 @@
     // 通信
     IP_ADDRESS: [T("IP_ADDRESS", /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/gu)],
     URL: [T("URL", /https?:\/\/[^\s<>"'、。）]+/gu)],
+    // クレジットカード — IIN で絞ったうえで Luhn 検証する。
+    //
+    // 以前は patterns.js にパターン自体が無く (categories / severity /
+    // classification / surrogates には CREDIT_CARD が登録済みだった)、
+    // 実際には別ラベルが部分マッチして桁が漏れていた:
+    //   4111-1111-1111-1111 -> 4<POSTAL_CODE_1>-1<POSTAL_CODE_1>
+    //   4111 1111 1111 1111 -> <MY_NUMBER_1> 1111
+    //   4111111111111111    -> 素通り
+    // IIN を列挙せず 13-19 桁 + Luhn だけにすると、Luhn は 1/10 の確率で
+    // 偶然通るため発注番号等が誤検出される。両方を課している。
+    CREDIT_CARD: [
+      // Visa / Mastercard / JCB / Discover / UnionPay — 16 桁 (4-4-4-4)
+      T(
+        "CREDIT_CARD",
+        /\b(?:4\d{3}|5[1-5]\d{2}|2(?:2[2-9]\d|[3-6]\d{2}|7[01]\d|720)|35(?:2[89]|[3-8]\d)|6(?:011|5\d{2}|4[4-9]\d)|62\d{2})[ -]?\d{4}[ -]?\d{4}[ -]?\d{4}\b/gu,
+        luhnValid,
+      ),
+      // American Express — 15 桁 (4-6-5)
+      T("CREDIT_CARD", /\b3[47]\d{2}[ -]?\d{6}[ -]?\d{5}\b/gu, luhnValid),
+      // Diners Club — 14 桁 (4-6-4)
+      T("CREDIT_CARD", /\b3(?:0[0-5]\d|[68]\d{2})[ -]?\d{6}[ -]?\d{4}\b/gu, luhnValid),
+    ],
     // マイナンバー / 口座 / 免許 / パスポート
     MY_NUMBER: [T("MY_NUMBER", /\b\d{4}\s*\d{4}\s*\d{4}\b/gu)],
     BANK_ACCOUNT: [T("BANK_ACCOUNT", /(?:普通|当座|貯蓄)\s*(?:口座)?\s*(?:番号)?\s*[:：]?\s*\d{6,8}/gu)],

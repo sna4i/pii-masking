@@ -47,12 +47,14 @@
     if (!deps.patterns) throw new Error("mask-mcp engine: patterns missing");
     const disabled = new Set((options && options.disabledCategories) || []);
     const out = [];
-    for (const { entity_type, pattern } of deps.patterns.getPresetPatterns(disabled)) {
+    for (const { entity_type, pattern, validate } of deps.patterns.getPresetPatterns(disabled)) {
       // Clone so module-level regex lastIndex is never mutated.
       const re = new RegExp(pattern.source, pattern.flags);
       let m;
       while ((m = re.exec(text)) !== null) {
         if (m.index === re.lastIndex) { re.lastIndex += 1; continue; }
+        // Constraints a regex cannot express (e.g. the card check digit).
+        if (validate && !validate(m[0])) continue;
         out.push({
           entity_type, start: m.index, end: m.index + m[0].length,
           text: m[0], score: 1.0, action: "masked",
