@@ -16,6 +16,16 @@
     return { categories: pick(c, ns.categories), classification: pick(cl, ns.classification), severity: pick(s, ns.severity) };
   }
 
+  // プレースホルダ番号を決めるためのキー。表記ゆれで同じ実体が別番号に
+  // ならないよう、内部の空白だけ畳む。「氏名：山田 太郎」と
+  // 「山田太郎様」は同一人物なので同じ <JP_SURNAME_1> を指すべきで、
+  // 別番号になると復元時に 2 人に分かれてしまう。
+  // 表示と置換には元の表記をそのまま使う — ここで正規化するのは
+  // グルーピングのキーだけ。
+  function groupKey(entityType, surface) {
+    return entityType + "\x00" + String(surface).replace(/[\s\u3000]+/g, "");
+  }
+
   // aggregate_detections(detections) → AggregatedEntity[].
   function aggregateDetections(detections) {
     const { categories, classification, severity } = resolveDeps();
@@ -35,7 +45,7 @@
     for (const hits of byValue.values()) for (const h of hits) flat.push(h);
     flat.sort((a, b) => a.start - b.start || a.end - b.end);
     for (const det of flat) {
-      const key = det.entity_type + "\x00" + det.text;
+      const key = groupKey(det.entity_type, det.text);
       if (!numbering.has(key)) {
         const n = (counters.get(det.entity_type) || 0) + 1;
         counters.set(det.entity_type, n);
@@ -93,7 +103,7 @@
     const sorted = [...detections].sort((a, b) => a.start - b.start || a.end - b.end);
     for (const item of sorted) {
       const surface = originalText.slice(item.start, item.end);
-      const key = item.entity_type + "\x00" + surface;
+      const key = groupKey(item.entity_type, surface);
       if (!assignments.has(key)) {
         const n = (counters.get(item.entity_type) || 0) + 1;
         counters.set(item.entity_type, n);
@@ -125,7 +135,7 @@
     let result = originalText;
     for (const item of descending) {
       const surface = originalText.slice(item.start, item.end);
-      const n = assignments.get(item.entity_type + "\x00" + surface) || 1;
+      const n = assignments.get(groupKey(item.entity_type, surface)) || 1;
       result = result.slice(0, item.start) + "<" + item.entity_type + "_" + n + ">" + result.slice(item.end);
     }
     return result;

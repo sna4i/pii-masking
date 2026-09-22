@@ -121,3 +121,19 @@ test("maskAggregated and maskSanitize agree on the label for one span", async ()
     "the two entry points disagree on the label for the same span",
   );
 });
+
+test("the same name written with or without a space shares a placeholder", async () => {
+  // A record writes 「山田 太郎」 in a labelled field and 「山田太郎様」 in
+  // prose. Keying the placeholder on the raw surface makes them two
+  // different entities, so un-masking turns one person into two.
+  const text = "氏名：山田 太郎\n担当の山田太郎様より連絡";
+  const agg = await engine.maskAggregated(text, {});
+  const names = agg.aggregated.filter((e) => e.label === "JP_SURNAME");
+
+  assert.ok(names.length >= 2, "expected both spellings to be detected");
+  assert.equal(
+    new Set(names.map((e) => e.placeholder)).size,
+    1,
+    `same person got ${names.length} placeholders: ${names.map((e) => `${e.placeholder}<-${e.value}`).join(", ")}`,
+  );
+});
