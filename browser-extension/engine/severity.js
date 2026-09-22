@@ -59,6 +59,8 @@
     KATAKANA_NAME: "low",
     // USER_DEFINED_* — user-selected category maps to the category's
     BUSINESS_CONFIDENTIAL: "high",
+    SCHOOL_NAME: "high",
+    DEVICE_ID: "medium",
     CORPORATE_NUMBER: "medium",
     INVOICE_REG_NUMBER: "medium",
     MAC_ADDRESS: "medium",

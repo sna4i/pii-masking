@@ -50,6 +50,8 @@
     DEPARTMENT: "identifier",
     // USER_DEFINED_* — classification は category 系統を踏襲。
     BUSINESS_CONFIDENTIAL: "semantic",
+    SCHOOL_NAME: "proper_noun",
+    DEVICE_ID: "identifier",
     CORPORATE_NUMBER: "identifier",
     INVOICE_REG_NUMBER: "identifier",
     MAC_ADDRESS: "identifier",
