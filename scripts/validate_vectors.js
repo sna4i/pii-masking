@@ -35,7 +35,7 @@ require(path.join(ENGINE_DIR, "aggregate.js"));
 require(path.join(ENGINE_DIR, "force-mask.js"));
 require(path.join(ENGINE_DIR, "blocklist.js"));
 
-function runCase(vector, caseDef) {
+async function runCase(vector, caseDef) {
   const mode = vector.mode || "detection";
   const input = caseDef.input;
   if (typeof input !== "string") {
@@ -45,7 +45,7 @@ function runCase(vector, caseDef) {
     };
   }
 
-  const result = engine.maskAggregated(input);
+  const result = await engine.maskAggregated(input);
   const aggregated = result.aggregated || [];
   const errors = [];
 
@@ -124,7 +124,7 @@ function runCase(vector, caseDef) {
   return { ok: false, reason: errors.join("; ") };
 }
 
-function main() {
+async function main() {
   if (!fs.existsSync(VECTORS_DIR)) {
     console.error(`vectors directory not found: ${VECTORS_DIR}`);
     process.exit(1);
@@ -154,7 +154,7 @@ function main() {
       const c = cases[i];
       const name = c.name || `case#${i + 1}`;
       total += 1;
-      const res = runCase(vector, c);
+      const res = await runCase(vector, c);
       perCategory[fname] = perCategory[fname] || { pass: 0, fail: 0 };
       if (res.ok) {
         pass += 1;
@@ -185,4 +185,7 @@ function main() {
   process.exit(0);
 }
 
-main();
+main().catch((e) => {
+  console.error(`validator crashed: ${e && e.stack ? e.stack : e}`);
+  process.exit(1);
+});

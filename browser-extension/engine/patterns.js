@@ -12,8 +12,53 @@
       ? (() => { try { return require("./dictionaries.js"); } catch (_) { return null; } })()
       : (root && root.__localMaskMCP && root.__localMaskMCP.engine && root.__localMaskMCP.engine.dictionaries) || null;
 
-  // Shorthand so the table below stays readable.
-  const T = (entity_type, pattern) => ({ entity_type, pattern });
+  // Shorthand so the table below stays readable. ``validate`` is
+  // optional: when present, collectDetections drops a match for which it
+  // returns false. Needed where a regex cannot express the constraint —
+  // card numbers carry a check digit, and without verifying it a 16-digit
+  // order number masks as a credit card.
+  const T = (entity_type, pattern, validate) =>
+    validate ? { entity_type, pattern, validate } : { entity_type, pattern };
+
+  // ---- 住所 ------------------------------------------------------------
+  // 以前は都道府県を `.{2,3}県` というワイルドカードで書いていたため
+  // 「隣の県」が都道府県として通り、続く `[^\s、。,]{0,20}` が貪欲に
+  // 助詞や動詞まで飲み込んでいた:
+  //   本件は隣の県の市場で検証する -> ADDRESS「は隣の県の市場で検証する」
+  //   兵庫県明石市の事務所に…      -> ADDRESS「兵庫県明石市の事務所に…」
+  // dictionaries.js が持つ 47 都道府県の正確なリストで anchor し、街区
+  // 部分に使える文字を住所に出うるものだけに制限する。
+  const PREF_ALT = dicts
+    ? dicts.JP_PREFECTURES.join("|")
+    : "北海道|東京都|京都府|大阪府";
+  // 市区町村。[市区町村郡] を除外した char class で「最初の suffix」で止める。
+  const CITY_PART = "[^\\s、。,市区町村郡]{1,6}[市区町村郡]";
+  // 街区 (町名・丁目・番地)。先頭は漢字/カタカナ/数字に限る — ここを
+  // 「の」始まりまで許すと「明石市の事務所」を住所として飲んでしまう。
+  // 2 文字目以降は「丸の内」のような地名のために「の」を許す。
+  const STREET_PART =
+    "[\\p{Script=Han}\\p{Script=Katakana}0-9０-９]" +
+    "[\\p{Script=Han}\\p{Script=Katakana}0-9０-９ーの\\-‐－]*";
+  const PREFECTURE_CITY_RE = new RegExp(`(?:${PREF_ALT})${CITY_PART}`, "gu");
+  const ADDRESS_RE = new RegExp(`(?:${PREF_ALT})${CITY_PART}${STREET_PART}`, "gu");
+
+  // Luhn (ISO/IEC 7812-1) check digit — every payment card carries one.
+  function luhnValid(surface) {
+    const digits = surface.replace(/\D/g, "");
+    if (digits.length < 13 || digits.length > 19) return false;
+    let sum = 0;
+    let double = false;
+    for (let i = digits.length - 1; i >= 0; i--) {
+      let d = digits.charCodeAt(i) - 48;
+      if (double) {
+        d *= 2;
+        if (d > 9) d -= 9;
+      }
+      sum += d;
+      double = !double;
+    }
+    return sum % 10 === 0;
+  }
 
   const BUILTIN_PATTERNS = {
     // 都道府県+市区町村 単体 (兵庫県明石市 / 東京都渋谷区 など)。
@@ -21,17 +66,14 @@
     // 止まるようにしている。これがないと「明石市大久保町」のように
     // 町名まで貪欲に飲み込まれる。street が続くフル住所は ADDRESS が
     // longer span を取るため衝突しない。
-    PREFECTURE_CITY: [
-      T(
-        "PREFECTURE_CITY",
-        /(?:北海道|(?:東京|京都|大阪)(?:都|府)|.{2,3}県)(?:[^\s、。,市区町村郡]{1,6}[市区町村郡])/gu,
-      ),
-    ],
-    // 住所 (番地まで含むフル住所)
-    ADDRESS: [T("ADDRESS", /(?:北海道|(?:東京|京都|大阪)(?:都|府)|.{2,3}県)(?:[^\s、。,]{1,6}[市区町村郡])[^\s、。,]{0,20}/gu)],
+    PREFECTURE_CITY: [T("PREFECTURE_CITY", PREFECTURE_CITY_RE)],
+    // 住所 (町名・番地まで含むフル住所)。PREFECTURE_CITY + 街区部分。
+    ADDRESS: [T("ADDRESS", ADDRESS_RE)],
     // 年齢 / 性別
     AGE: [T("AGE", /\d{1,3}\s*(?:歳|才)/gu)],
-    GENDER: [T("GENDER", /(?:男性|女性|その他)/gu)],
+    // 「その他」は業務文書で最頻出の語なので性別ラベルから外す。
+    // 後続が漢字/カタカナなら複合語 (男性ホルモン / 女性誌) とみなす。
+    GENDER: [T("GENDER", /(?:男性|女性)(?![\p{Script=Han}\p{Script=Katakana}ー])/gu)],
     // 金額
     MONETARY_AMOUNT: [
       T("MONETARY_AMOUNT", /[¥￥]\s*[\d,]+(?:\.\d+)?(?:\s*円)?/gu),
@@ -54,16 +96,48 @@
       ),
       T(
         "COMPANY",
-        /[\p{Script=Katakana}\p{Script=Han}A-Za-z0-9・ー＆&\-]{1,20}(?:株式会社|有限会社|合同会社|㈱|㈲|Inc\.|Corp\.|Ltd\.|LLC|Co\.,?\s*Ltd\.)/gu,
+        // 検出は NFKC 正規化後のテキストに対して行うため、合字 ㈱ / ㈲ は
+        // この時点で (株) / (有) に展開されている。リテラル ㈱ だけを
+        // 書いていると「アクメ㈱」を取りこぼす。展開形を並べておけば
+        // 元テキストが ㈱ でも (株) でも同じように当たる。
+        /[\p{Script=Katakana}\p{Script=Han}A-Za-z0-9・ー＆&\-]{1,20}(?:株式会社|有限会社|合同会社|\(株\)|\(有\)|㈱|㈲|Inc\.|Corp\.|Ltd\.|LLC|Co\.,?\s*Ltd\.)/gu,
       ),
     ],
     // 通信
     IP_ADDRESS: [T("IP_ADDRESS", /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/gu)],
     URL: [T("URL", /https?:\/\/[^\s<>"'、。）]+/gu)],
+    // クレジットカード — IIN で絞ったうえで Luhn 検証する。
+    //
+    // 以前は patterns.js にパターン自体が無く (categories / severity /
+    // classification / surrogates には CREDIT_CARD が登録済みだった)、
+    // 実際には別ラベルが部分マッチして桁が漏れていた:
+    //   4111-1111-1111-1111 -> 4<POSTAL_CODE_1>-1<POSTAL_CODE_1>
+    //   4111 1111 1111 1111 -> <MY_NUMBER_1> 1111
+    //   4111111111111111    -> 素通り
+    // IIN を列挙せず 13-19 桁 + Luhn だけにすると、Luhn は 1/10 の確率で
+    // 偶然通るため発注番号等が誤検出される。両方を課している。
+    CREDIT_CARD: [
+      // Visa / Mastercard / JCB / Discover / UnionPay — 16 桁 (4-4-4-4)
+      T(
+        "CREDIT_CARD",
+        /\b(?:4\d{3}|5[1-5]\d{2}|2(?:2[2-9]\d|[3-6]\d{2}|7[01]\d|720)|35(?:2[89]|[3-8]\d)|6(?:011|5\d{2}|4[4-9]\d)|62\d{2})[ -]?\d{4}[ -]?\d{4}[ -]?\d{4}\b/gu,
+        luhnValid,
+      ),
+      // American Express — 15 桁 (4-6-5)
+      T("CREDIT_CARD", /\b3[47]\d{2}[ -]?\d{6}[ -]?\d{5}\b/gu, luhnValid),
+      // Diners Club — 14 桁 (4-6-4)
+      T("CREDIT_CARD", /\b3(?:0[0-5]\d|[68]\d{2})[ -]?\d{6}[ -]?\d{4}\b/gu, luhnValid),
+    ],
     // マイナンバー / 口座 / 免許 / パスポート
     MY_NUMBER: [T("MY_NUMBER", /\b\d{4}\s*\d{4}\s*\d{4}\b/gu)],
     BANK_ACCOUNT: [T("BANK_ACCOUNT", /(?:普通|当座|貯蓄)\s*(?:口座)?\s*(?:番号)?\s*[:：]?\s*\d{6,8}/gu)],
-    DRIVERS_LICENSE: [T("DRIVERS_LICENSE", /\b\d{2}\s*-?\s*\d{2}\s*-?\s*\d{6}\s*-?\s*\d{2}\b/gu)],
+    // 運転免許証番号 — 12 桁。区切りを必須にしている点が重要で、以前は
+    // 全ての区切りが optional だったため実質 /\b\d{12}\b/ に退化し、
+    // マイナンバー (同じ 12 桁) と完全に同一 span を取り合っていた。
+    // 同一 span を 2 ラベルが取ると maskAggregated と maskSanitize で
+    // tie-break がずれ、サイドバーの表示と実際に送信される文字列が
+    // 食い違う。区切り無しの 12 桁は MY_NUMBER に委ねる。
+    DRIVERS_LICENSE: [T("DRIVERS_LICENSE", /\b\d{2}[\s-]\d{2}[\s-]\d{6}[\s-]\d{2}\b/gu)],
     PASSPORT: [T("PASSPORT", /\b[A-Z]{2}\d{7}\b/gu)],
     // DB 接続 / API キー / シークレット
     DB_CONNECTION: [
@@ -72,8 +146,13 @@
     ],
     API_KEY: [
       // --- Generic catch-alls (kept for backwards compat) ------------
-      T("API_KEY", /(?:sk|pk|api[_\-]?key|access[_\-]?key)[_\-][\w\-]{20,}/gu),
-      T("SECRET", /(?:password|secret|token|api_key|apikey|access_token)\s*[=:]\s*\S{8,}/gu),
+      // ``i`` フラグは generic 系のみ。.env / CI の変数ダンプや
+      // Authorization ヘッダは PASSWORD= / API_KEY= のように大文字で
+      // 書かれることが多く、小文字限定では取りこぼす。逆に下の
+      // ベンダー固有プレフィックス (AKIA / ghp_ / SG.) は大文字小文字が
+      // 仕様の一部なので ``i`` を付けない — 付けると精度が落ちる。
+      T("API_KEY", /(?:sk|pk|api[_\-]?key|access[_\-]?key)[_\-][\w\-]{20,}/giu),
+      T("SECRET", /(?:password|secret|token|api_key|apikey|access_token)\s*[=:]\s*\S{8,}/giu),
 
       // --- Vendor-specific well-known token formats ------------------
       // Patterns below anchor on the exact prefix each vendor uses
@@ -141,7 +220,7 @@
       // JWT — three base64url segments. Greedy but safe: header ``eyJ``
       T("API_KEY", /\beyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+/gu),
       // Authorization: Bearer <token>
-      T("API_KEY", /\bBearer\s+[A-Za-z0-9\-_.~+/]{16,}=*/gu),
+      T("API_KEY", /\bBearer\s+[A-Za-z0-9\-_.~+/]{16,}=*/giu),
       // Generic "Authorization:" header value
       T("API_KEY", /(?:Authorization|X-Api-Key)\s*:\s*\S{16,}/giu),
       // PEM private keys (RSA / EC / OpenSSH / generic)
@@ -163,44 +242,50 @@
     // カタカナ名 (ヒューリスティック)
     KATAKANA_NAME: [T("KATAKANA_NAME", /[ァ-ヶー]{4,}/gu)],
     // 業務文書系
+    // ラベル語 (顧客番号 / 契約番号 …) の直後の区切りは optional。
+    // 以前は \s*[:：=]\s* が必須だったため、日本語で自然な
+    // 「顧客番号は12345です」「社員番号 A-9981」を 1 件も拾えなかった。
+    // 区切りを緩めた分、値側を 3 文字以上の英数/ハイフンに絞って
+    // 「顧客番号について相談したい」のような文に当たらないようにする。
     POSTAL_CODE: [T("POSTAL_CODE", /〒?\d{3}-\d{4}/gu)],
     DEPARTMENT: [
       T("DEPARTMENT", /\b(?:DEPT|DIV|DIVISION)[_\-]\d{2,6}\b/gu),
-      T("DEPARTMENT", /(?:部署コード|部門コード)\s*[:：=]\s*[\w\-]+/gu),
+      T("DEPARTMENT", /(?:部署コード|部門コード)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
     ],
     CONTRACT_NUMBER: [
       T("CONTRACT_NUMBER", /\b(?:CONTRACT|CNTR|AGR)[_\-][\w\-]{3,20}\b/gu),
-      T("CONTRACT_NUMBER", /契約(?:番号|No\.?)\s*[:：=]\s*[\w\-]+/gu),
+      T("CONTRACT_NUMBER", /契約(?:番号|No\.?)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
     ],
     PURCHASE_ORDER: [
       T("PURCHASE_ORDER", /\b(?:PO|P\.O\.|ORDER)[_\-]\d{4,10}\b/gu),
-      T("PURCHASE_ORDER", /発注(?:番号|No\.?)\s*[:：=]\s*[\w\-]+/gu),
+      T("PURCHASE_ORDER", /発注(?:番号|No\.?)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
     ],
     CUSTOMER_ID: [
       T("CUSTOMER_ID", /\b(?:CUST|CUSTOMER|CLT)[_\-]\d{4,10}\b/gu),
-      T("CUSTOMER_ID", /顧客(?:番号|ID|コード)\s*[:：=]\s*[\w\-]+/gu),
+      T("CUSTOMER_ID", /顧客(?:番号|ID|コード)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
     ],
     INVOICE_NUMBER: [
       T("INVOICE_NUMBER", /\b(?:INV|INVOICE)[_\-]\d{4,10}\b/gu),
-      T("INVOICE_NUMBER", /請求(?:書)?(?:番号|No\.?)\s*[:：=]\s*[\w\-]+/gu),
+      T("INVOICE_NUMBER", /請求(?:書)?(?:番号|No\.?)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
     ],
     EMPLOYEE_ID: [
-      T("EMPLOYEE_ID", /(?:社員|従業員|スタッフ)(?:番号|ID|コード)\s*[:：=]\s*[\w\-]+/gu),
+      T("EMPLOYEE_ID", /(?:社員|従業員|スタッフ)(?:番号|ID|コード)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
       T("EMPLOYEE_ID", /\b(?:STAFF|WORKER)[_\-]\d{3,10}\b/gu),
     ],
     MEMBER_ID: [
-      T("MEMBER_ID", /会員(?:番号|ID|コード)\s*[:：=]\s*[\w\-]+/gu),
+      T("MEMBER_ID", /会員(?:番号|ID|コード)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
       T("MEMBER_ID", /\bMEMBER[_\-]\d{4,10}\b/gu),
     ],
     PATIENT_ID: [
       T("PATIENT_ID", /\b(?:PATIENT|MRN)[_\-]\d{4,10}\b/gu),
-      T("PATIENT_ID", /(?:患者|診療)(?:番号|ID)\s*[:：=]\s*[\w\-]+/gu),
+      T("PATIENT_ID", /(?:患者|診療)(?:番号|ID)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
     ],
     SKU: [
       T("SKU", /\bSKU[_\-][\w\-]{3,20}\b/gu),
-      T("SKU", /(?:製品|商品)(?:コード|番号)\s*[:：=]\s*[\w\-]+/gu),
+      T("SKU", /(?:製品|商品)(?:コード|番号)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
     ],
-    BLOOD_TYPE: [T("BLOOD_TYPE", /(?:AB|A|B|O)型/gu)],
+    // 後続が漢字/カタカナなら別語 (A型肝炎 / B型インフルエンザ) とみなす。
+    BLOOD_TYPE: [T("BLOOD_TYPE", /(?:AB|A|B|O)型(?![\p{Script=Han}\p{Script=Katakana}ー])/gu)],
     ANNUAL_INCOME: [
       T("ANNUAL_INCOME", /年収\s*[\d,]+\s*万?円?/gu),
       T("ANNUAL_INCOME", /月収\s*[\d,]+\s*万?円?/gu),
@@ -211,7 +296,7 @@
     ],
     ASSET_NUMBER: [
       T("ASSET_NUMBER", /\b(?:ASSET|FA)[_\-]\d{4,10}\b/gu),
-      T("ASSET_NUMBER", /資産(?:番号|コード)\s*[:：=]\s*[\w\-]+/gu),
+      T("ASSET_NUMBER", /資産(?:番号|コード)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
     ],
     LICENSE_NUMBER: [T("LICENSE_NUMBER", /\b(?:LIC|LICENSE)[_\-][\w\-]{4,20}\b/gu)],
 

@@ -1,0 +1,139 @@
+{
+  "label_groups": [
+    "PHONE_NUMBER",
+    "POSTAL_CODE",
+    "EMAIL_ADDRESS",
+    "MY_NUMBER",
+    "SECRET",
+    "API_KEY",
+    "COMPANY"
+  ],
+  "cases": [
+    {
+      "name": "full-width phone number",
+      "input": "電話は０９０－１２３４－５６７８ です",
+      "expected": [
+        {
+          "label": "PHONE_NUMBER",
+          "text": "０９０－１２３４－５６７８"
+        }
+      ]
+    },
+    {
+      "name": "full-width postal code",
+      "input": "〒１５０－０００１ 渋谷区",
+      "expected": [
+        {
+          "label": "POSTAL_CODE",
+          "text": "〒１５０－０００１"
+        }
+      ]
+    },
+    {
+      "name": "full-width My Number",
+      "input": "マイナンバーは １２３４５６７８９０１２ です",
+      "expected": [
+        {
+          "label": "MY_NUMBER",
+          "text": "１２３４５６７８９０１２"
+        }
+      ]
+    },
+    {
+      "name": "full-width email",
+      "input": "連絡先は ｔａｒｏ＠ｅｘａｍｐｌｅ．ｃｏｍ です",
+      "expected": [
+        {
+          "label": "EMAIL_ADDRESS",
+          "text": "ｔａｒｏ＠ｅｘａｍｐｌｅ．ｃｏｍ"
+        }
+      ]
+    },
+    {
+      "name": "half-width phone still works",
+      "input": "電話は090-1234-5678 です",
+      "expected": [
+        {
+          "label": "PHONE_NUMBER",
+          "text": "090-1234-5678"
+        }
+      ]
+    },
+    {
+      "name": "uppercase PASSWORD assignment",
+      "input": "PASSWORD=hunter2secret を設定",
+      "expected": [
+        {
+          "label": "SECRET"
+        }
+      ]
+    },
+    {
+      "name": "uppercase API_KEY assignment",
+      "input": "API_KEY=abcd1234efgh5678 を設定",
+      "expected": [
+        {
+          "label": "SECRET"
+        }
+      ]
+    },
+    {
+      "name": "lowercase assignment still works",
+      "input": "password=hunter2secret を設定",
+      "expected": [
+        {
+          "label": "SECRET"
+        }
+      ]
+    },
+    {
+      "name": "vendor prefixes stay case-sensitive",
+      "input": "キーは AKIAIOSFODNN7EXAMPLE です",
+      "expected": [
+        {
+          "label": "API_KEY",
+          "text": "AKIAIOSFODNN7EXAMPLE"
+        }
+      ]
+    },
+    {
+      "name": "negative — lowercase akia is not an AWS key",
+      "input": "文字列 akiaiosfodnn7example について",
+      "expected_absent": [
+        {
+          "label": "API_KEY"
+        }
+      ]
+    },
+    {
+      "name": "ligature ㈱ survives NFKC expansion to (株)",
+      "input": "アクメ㈱と取引",
+      "expected": [
+        {
+          "label": "COMPANY",
+          "text": "アクメ㈱"
+        }
+      ]
+    },
+    {
+      "name": "ligature ㈲ survives NFKC expansion to (有)",
+      "input": "アクメ㈲の件",
+      "expected": [
+        {
+          "label": "COMPANY",
+          "text": "アクメ㈲"
+        }
+      ]
+    },
+    {
+      "name": "spelled-out (株) also matches",
+      "input": "アクメ(株)と取引",
+      "expected": [
+        {
+          "label": "COMPANY",
+          "text": "アクメ(株)"
+        }
+      ]
+    }
+  ]
+}

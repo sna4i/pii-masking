@@ -103,7 +103,25 @@
     // Last-wins dedup by (start, end).
     const unique = new Map();
     for (const item of detections) unique.set(item.start + ":" + item.end, item);
-    const descending = [...unique.values()].sort((a, b) => b.start - a.start);
+
+    // Drop anything that intersects a span we already accepted. Callers
+    // normally hand us the output of engine.resolveOverlaps, which is
+    // already disjoint, so this is a guard rather than a filter — but
+    // without it a caller passing overlapping spans gets a torn
+    // placeholder ("<JP_SURNAME_1>ROPER_NOUN_PERSON_1>"), because the
+    // substitution below indexes the *mutated* string with offsets taken
+    // from the *original* one.
+    const accepted = [];
+    let lastEnd = -1;
+    for (const item of [...unique.values()].sort(
+      (a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start),
+    )) {
+      if (item.start < lastEnd) continue;
+      accepted.push(item);
+      lastEnd = item.end;
+    }
+
+    const descending = accepted.sort((a, b) => b.start - a.start);
     let result = originalText;
     for (const item of descending) {
       const surface = originalText.slice(item.start, item.end);
