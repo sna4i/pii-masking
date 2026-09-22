@@ -22,3 +22,8 @@ __pycache__/
 
 # build artifacts (Chrome Web Store variant — produced by scripts/build-store.sh)
 dist/
+
+# Playwright が作るブラウザプロファイル。キャッシュに 100MB 超の blob が
+# 入るため、git add -A で巻き込むと GitHub の push が pre-receive で落ちる。
+tests/integration/.tmp-profile-*/
+.playwright-mcp/
