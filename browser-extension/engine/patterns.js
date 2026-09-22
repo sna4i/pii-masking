@@ -242,42 +242,47 @@
     // カタカナ名 (ヒューリスティック)
     KATAKANA_NAME: [T("KATAKANA_NAME", /[ァ-ヶー]{4,}/gu)],
     // 業務文書系
+    // ラベル語 (顧客番号 / 契約番号 …) の直後の区切りは optional。
+    // 以前は \s*[:：=]\s* が必須だったため、日本語で自然な
+    // 「顧客番号は12345です」「社員番号 A-9981」を 1 件も拾えなかった。
+    // 区切りを緩めた分、値側を 3 文字以上の英数/ハイフンに絞って
+    // 「顧客番号について相談したい」のような文に当たらないようにする。
     POSTAL_CODE: [T("POSTAL_CODE", /〒?\d{3}-\d{4}/gu)],
     DEPARTMENT: [
       T("DEPARTMENT", /\b(?:DEPT|DIV|DIVISION)[_\-]\d{2,6}\b/gu),
-      T("DEPARTMENT", /(?:部署コード|部門コード)\s*[:：=]\s*[\w\-]+/gu),
+      T("DEPARTMENT", /(?:部署コード|部門コード)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
     ],
     CONTRACT_NUMBER: [
       T("CONTRACT_NUMBER", /\b(?:CONTRACT|CNTR|AGR)[_\-][\w\-]{3,20}\b/gu),
-      T("CONTRACT_NUMBER", /契約(?:番号|No\.?)\s*[:：=]\s*[\w\-]+/gu),
+      T("CONTRACT_NUMBER", /契約(?:番号|No\.?)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
     ],
     PURCHASE_ORDER: [
       T("PURCHASE_ORDER", /\b(?:PO|P\.O\.|ORDER)[_\-]\d{4,10}\b/gu),
-      T("PURCHASE_ORDER", /発注(?:番号|No\.?)\s*[:：=]\s*[\w\-]+/gu),
+      T("PURCHASE_ORDER", /発注(?:番号|No\.?)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
     ],
     CUSTOMER_ID: [
       T("CUSTOMER_ID", /\b(?:CUST|CUSTOMER|CLT)[_\-]\d{4,10}\b/gu),
-      T("CUSTOMER_ID", /顧客(?:番号|ID|コード)\s*[:：=]\s*[\w\-]+/gu),
+      T("CUSTOMER_ID", /顧客(?:番号|ID|コード)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
     ],
     INVOICE_NUMBER: [
       T("INVOICE_NUMBER", /\b(?:INV|INVOICE)[_\-]\d{4,10}\b/gu),
-      T("INVOICE_NUMBER", /請求(?:書)?(?:番号|No\.?)\s*[:：=]\s*[\w\-]+/gu),
+      T("INVOICE_NUMBER", /請求(?:書)?(?:番号|No\.?)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
     ],
     EMPLOYEE_ID: [
-      T("EMPLOYEE_ID", /(?:社員|従業員|スタッフ)(?:番号|ID|コード)\s*[:：=]\s*[\w\-]+/gu),
+      T("EMPLOYEE_ID", /(?:社員|従業員|スタッフ)(?:番号|ID|コード)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
       T("EMPLOYEE_ID", /\b(?:STAFF|WORKER)[_\-]\d{3,10}\b/gu),
     ],
     MEMBER_ID: [
-      T("MEMBER_ID", /会員(?:番号|ID|コード)\s*[:：=]\s*[\w\-]+/gu),
+      T("MEMBER_ID", /会員(?:番号|ID|コード)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
       T("MEMBER_ID", /\bMEMBER[_\-]\d{4,10}\b/gu),
     ],
     PATIENT_ID: [
       T("PATIENT_ID", /\b(?:PATIENT|MRN)[_\-]\d{4,10}\b/gu),
-      T("PATIENT_ID", /(?:患者|診療)(?:番号|ID)\s*[:：=]\s*[\w\-]+/gu),
+      T("PATIENT_ID", /(?:患者|診療)(?:番号|ID)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
     ],
     SKU: [
       T("SKU", /\bSKU[_\-][\w\-]{3,20}\b/gu),
-      T("SKU", /(?:製品|商品)(?:コード|番号)\s*[:：=]\s*[\w\-]+/gu),
+      T("SKU", /(?:製品|商品)(?:コード|番号)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
     ],
     // 後続が漢字/カタカナなら別語 (A型肝炎 / B型インフルエンザ) とみなす。
     BLOOD_TYPE: [T("BLOOD_TYPE", /(?:AB|A|B|O)型(?![\p{Script=Han}\p{Script=Katakana}ー])/gu)],
@@ -291,7 +296,7 @@
     ],
     ASSET_NUMBER: [
       T("ASSET_NUMBER", /\b(?:ASSET|FA)[_\-]\d{4,10}\b/gu),
-      T("ASSET_NUMBER", /資産(?:番号|コード)\s*[:：=]\s*[\w\-]+/gu),
+      T("ASSET_NUMBER", /資産(?:番号|コード)\s*(?:は|が|[:：=＝])?\s*[\w\-ー－]{3,}/gu),
     ],
     LICENSE_NUMBER: [T("LICENSE_NUMBER", /\b(?:LIC|LICENSE)[_\-][\w\-]{4,20}\b/gu)],
 

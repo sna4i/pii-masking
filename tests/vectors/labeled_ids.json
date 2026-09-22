@@ -1,0 +1,26 @@
+{
+  "label_groups": ["CUSTOMER_ID", "EMPLOYEE_ID", "CONTRACT_NUMBER", "INVOICE_NUMBER", "MEMBER_ID", "PATIENT_ID", "PURCHASE_ORDER", "SKU", "ASSET_NUMBER"],
+  "cases": [
+    { "name": "particle は instead of a colon",
+      "input": "顧客番号は12345です",
+      "expected": [{ "label": "CUSTOMER_ID" }] },
+    { "name": "bare space instead of a colon",
+      "input": "社員番号 A-9981 を確認",
+      "expected": [{ "label": "EMPLOYEE_ID" }] },
+    { "name": "contract number with a space",
+      "input": "契約番号 C-2026 の件",
+      "expected": [{ "label": "CONTRACT_NUMBER" }] },
+    { "name": "colon form still works",
+      "input": "顧客番号: 12345",
+      "expected": [{ "label": "CUSTOMER_ID" }] },
+    { "name": "full-width colon still works",
+      "input": "会員番号：M-7788",
+      "expected": [{ "label": "MEMBER_ID" }] },
+    { "name": "negative — bare noun with no value",
+      "input": "顧客番号について相談したい",
+      "expected_absent": [{ "label": "CUSTOMER_ID" }] },
+    { "name": "negative — too short to be an id",
+      "input": "顧客番号は12",
+      "expected_absent": [{ "label": "CUSTOMER_ID" }] }
+  ]
+}
