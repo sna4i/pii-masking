@@ -96,7 +96,11 @@
       ),
       T(
         "COMPANY",
-        /[\p{Script=Katakana}\p{Script=Han}A-Za-z0-9・ー＆&\-]{1,20}(?:株式会社|有限会社|合同会社|㈱|㈲|Inc\.|Corp\.|Ltd\.|LLC|Co\.,?\s*Ltd\.)/gu,
+        // 検出は NFKC 正規化後のテキストに対して行うため、合字 ㈱ / ㈲ は
+        // この時点で (株) / (有) に展開されている。リテラル ㈱ だけを
+        // 書いていると「アクメ㈱」を取りこぼす。展開形を並べておけば
+        // 元テキストが ㈱ でも (株) でも同じように当たる。
+        /[\p{Script=Katakana}\p{Script=Han}A-Za-z0-9・ー＆&\-]{1,20}(?:株式会社|有限会社|合同会社|\(株\)|\(有\)|㈱|㈲|Inc\.|Corp\.|Ltd\.|LLC|Co\.,?\s*Ltd\.)/gu,
       ),
     ],
     // 通信
@@ -142,8 +146,13 @@
     ],
     API_KEY: [
       // --- Generic catch-alls (kept for backwards compat) ------------
-      T("API_KEY", /(?:sk|pk|api[_\-]?key|access[_\-]?key)[_\-][\w\-]{20,}/gu),
-      T("SECRET", /(?:password|secret|token|api_key|apikey|access_token)\s*[=:]\s*\S{8,}/gu),
+      // ``i`` フラグは generic 系のみ。.env / CI の変数ダンプや
+      // Authorization ヘッダは PASSWORD= / API_KEY= のように大文字で
+      // 書かれることが多く、小文字限定では取りこぼす。逆に下の
+      // ベンダー固有プレフィックス (AKIA / ghp_ / SG.) は大文字小文字が
+      // 仕様の一部なので ``i`` を付けない — 付けると精度が落ちる。
+      T("API_KEY", /(?:sk|pk|api[_\-]?key|access[_\-]?key)[_\-][\w\-]{20,}/giu),
+      T("SECRET", /(?:password|secret|token|api_key|apikey|access_token)\s*[=:]\s*\S{8,}/giu),
 
       // --- Vendor-specific well-known token formats ------------------
       // Patterns below anchor on the exact prefix each vendor uses
@@ -211,7 +220,7 @@
       // JWT — three base64url segments. Greedy but safe: header ``eyJ``
       T("API_KEY", /\beyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+/gu),
       // Authorization: Bearer <token>
-      T("API_KEY", /\bBearer\s+[A-Za-z0-9\-_.~+/]{16,}=*/gu),
+      T("API_KEY", /\bBearer\s+[A-Za-z0-9\-_.~+/]{16,}=*/giu),
       // Generic "Authorization:" header value
       T("API_KEY", /(?:Authorization|X-Api-Key)\s*:\s*\S{16,}/giu),
       // PEM private keys (RSA / EC / OpenSSH / generic)

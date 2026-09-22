@@ -42,22 +42,62 @@
     return out;
   }
 
+  // NFKC-normalise while keeping a map back to the original offsets.
+  //
+  // Japanese text pasted out of Excel, Word or a form routinely carries
+  // full-width digits and punctuation (０９０－１２３４－５６７８,
+  // ｔａｒｏ＠ｅｘａｍｐｌｅ．ｃｏｍ). No character class in patterns.js
+  // covers those, so every numeric rule silently missed them. Matching
+  // against the normalised text fixes all of them at once, but the spans
+  // have to come back in ORIGINAL coordinates — applyTagMask and the
+  // review sidebar both index the text the user actually typed, and NFKC
+  // is not length-preserving (㈱ -> (株) grows, ｶﾞ -> ガ shrinks).
+  //
+  // map[i] is the original index that normalised character i came from;
+  // one trailing sentinel lets a half-open end offset map back too.
+  function nfkcWithMap(text) {
+    let norm = "";
+    const map = [];
+    let i = 0;
+    while (i < text.length) {
+      let consumed = 1;
+      let n = text[i].normalize("NFKC");
+      if (i + 1 < text.length) {
+        // Try a two-unit cluster first so half-width katakana followed by
+        // a voiced mark (ｶ + ﾞ) composes to ガ rather than decomposing.
+        const pair = (text[i] + text[i + 1]).normalize("NFKC");
+        if (pair.length === 1) { n = pair; consumed = 2; }
+      }
+      for (let k = 0; k < n.length; k++) map.push(i);
+      norm += n;
+      i += consumed;
+    }
+    map.push(text.length);
+    return { norm, map };
+  }
+
   function collectDetections(text, options) {
     const deps = resolveDeps();
     if (!deps.patterns) throw new Error("mask-mcp engine: patterns missing");
     const disabled = new Set((options && options.disabledCategories) || []);
+    const { norm, map } = nfkcWithMap(text);
+    const identity = norm === text;
     const out = [];
     for (const { entity_type, pattern, validate } of deps.patterns.getPresetPatterns(disabled)) {
       // Clone so module-level regex lastIndex is never mutated.
       const re = new RegExp(pattern.source, pattern.flags);
       let m;
-      while ((m = re.exec(text)) !== null) {
+      while ((m = re.exec(norm)) !== null) {
         if (m.index === re.lastIndex) { re.lastIndex += 1; continue; }
         // Constraints a regex cannot express (e.g. the card check digit).
         if (validate && !validate(m[0])) continue;
+        const start = identity ? m.index : map[m.index];
+        const end = identity ? m.index + m[0].length : map[m.index + m[0].length];
         out.push({
-          entity_type, start: m.index, end: m.index + m[0].length,
-          text: m[0], score: 1.0, action: "masked",
+          entity_type, start, end,
+          // Surface the ORIGINAL text: it is what gets substituted, what
+          // the sidebar shows, and what the blocklist is keyed on.
+          text: text.slice(start, end), score: 1.0, action: "masked",
         });
       }
     }
