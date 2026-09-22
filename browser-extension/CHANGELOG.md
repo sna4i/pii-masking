@@ -1,5 +1,67 @@
 # Changelog
 
+## 1.4.0 — 「意味として機密」な文の警告 + 検出エンジンの精度・網羅の修正 (2026-09-22)
+
+Chrome Web Store のレビュー (★4, 2026-08-16) を起点に検出エンジンを棚卸しし、
+出荷前に直すべき不具合とレビュー指摘への回答をまとめたリリース。
+
+### 新機能: 機密文の警告 (engine/confidential.js)
+
+> 未発表の値上げや買収交渉のような、文章の意味として機密になる情報は
+> 検出されませんでした
+
+PII ではないためマスクすべき span が存在せず、機密性は文の意味に宿る。
+よって span 検出器ではなく、文をスコアして `confidential` フィールドで
+**別枠**に返し、サイドバー上部に警告として描画する。`aggregated` には
+混ぜない — 自動置換すると送りたい文そのものが壊れるため。
+
+- トピックは 2 スロットの述語フレーム (slotA × slotB / 40 字窓) を語幹で保持。
+  日本語は膠着語なので `上げ` が 上げる/上げた/引き上げ を覆い、
+  `単価を上げる` のような言い換えが入る
+- 秘匿シグナルは 3 レジスタ (改まった / 時制相 / 口語否定可能形) を ±120 字で探す。
+  「…を決議します。まだ伏せてください。」のように文をまたぐのが普通の書き方
+- 比喩 (`飲み込む` = 買収) は意図的に追わない。追うと precision が壊れる
+- 未調整の hold-out で **precision 1.00 / recall 0.40**。UI にも限界を明記
+
+### 修正: v1.3.0 のリリースブロッカー
+
+- **ML 有効時に日本語のフルネームで出力が破損** していた。辞書 (score 1.0) と
+  NER (softmax < 1.0) が同一 span を取り合い、overlap 解決が両方残したうえで
+  `applyTagMask` が元オフセットで変更済み文字列を置換していた
+- **クレジットカード番号が未検出** だった。categories / severity / classification /
+  surrogates には登録済みなのに `patterns.js` にパターンが無く、
+  別ラベルが部分マッチして桁が漏れていた。IIN + Luhn で修正
+- **テストスイートが 5 ヶ月間死んでいた**。#38 で `maskAggregated` が async に
+  なった際 validator に `await` が付かず、全ケースが `aggregated=[]` を見ていた
+
+### 修正: 誤検出・取りこぼし
+
+- `ADDRESS` が助詞・動詞まで飲み込む (`兵庫県明石市の事務所にいらっしゃいました`)
+- `GENDER` が `その他` / `男性ホルモン` / `女性誌` に誤爆
+- `BLOOD_TYPE` が `A型肝炎` に誤爆
+- `KATAKANA_NAME` が外来語を人名判定 → 文脈ゲート 3 本に置換 (極性反転)
+- `田中太郎さん` が姓のみマスクで `太郎` が露出 → 敬称後読みで 1 span に
+- 全角数字が全ルールで不可視 → NFKC 正規化 + index map で一括対応
+- 大文字の `PASSWORD=` / `API_KEY=` を取りこぼし
+- 10 カテゴリで区切り記号が必須 (`顧客番号は12345です` が 0 件)
+- `COMPANY` / `IP_ADDRESS` / `URL` / `PHONE_NUMBER` の精度穴
+- PEM 秘密鍵が `API_KEY` 配列に同居し、カテゴリ無効化で道連れになる構造
+
+### 追加: 検出ラベル 13 種
+
+法人番号 (mod-9)、適格請求書 T番号、MAC / CIDR / 内部ホスト名、IBAN (mod-97)、
+US SSN、UK NINO、暗号資産アドレス、メールヘッダ、Cookie、ローカルユーザーパス、
+JSON の PII フィールド、略称企業参照 (A社 / 甲社)。
+
+`BANK_ACCOUNT` / `API_KEY` (AWS secret 側) / `SECRET` (URL 埋め込み認証情報) も拡張。
+
+### テスト
+
+- vector 86 → 175 件、unit テスト 16 件を新設
+- 未調整 hold-out を常設 (`confidential-holdout.test.mjs`)。
+  緑にするために語彙を足さないこと — 測定器をチューニングすると測定器でなくなる
+
+
 ## 1.3.0 — In-browser ML model (NER) as a non-LLM detection option, with options-page UI (2026-04-29)
 
 ### Phase 0b — options-page UI for the ML toggle
