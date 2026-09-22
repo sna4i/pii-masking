@@ -60,6 +60,39 @@
     return sum % 10 === 0;
   }
 
+  // 法人番号 (国税庁) のチェックディジット。
+  // 先頭 1 桁 = 9 − ((2·Σ偶数位 + Σ奇数位) mod 9)。位は下位から 1 始まり。
+  // 13 桁の裸マッチは FP が高いので、この検証と必ず対で使う。
+  function corporateNumberValid(surface) {
+    const d = surface.replace(/\D/g, "");
+    if (d.length !== 13) return false;
+    const check = Number(d[0]);
+    const body = d.slice(1); // 12 桁
+    let sum = 0;
+    for (let i = 0; i < 12; i++) {
+      // body[11] が 1 位。i=11 -> pos 1
+      const pos = 12 - i;
+      sum += Number(body[i]) * (pos % 2 === 0 ? 2 : 1);
+    }
+    return check === 9 - (sum % 9);
+  }
+
+  // IBAN (ISO 13616) の mod-97 検証。先頭 4 文字を末尾に回し、英字を
+  // A=10..Z=35 に開いた 10 進大数の 97 剰余が 1 になる。
+  function ibanValid(surface) {
+    const s = surface.replace(/[\s-]/g, "").toUpperCase();
+    if (!/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(s)) return false;
+    const rearranged = s.slice(4) + s.slice(0, 4);
+    let rem = 0;
+    for (const ch of rearranged) {
+      const part = ch >= "A" && ch <= "Z"
+        ? String(ch.charCodeAt(0) - 55)
+        : ch;
+      for (const digit of part) rem = (rem * 10 + Number(digit)) % 97;
+    }
+    return rem === 1;
+  }
+
   const BUILTIN_PATTERNS = {
     // 都道府県+市区町村 単体 (兵庫県明石市 / 東京都渋谷区 など)。
     // 中間 char class は [市区町村郡] を除外して「最初の suffix」で
@@ -135,7 +168,12 @@
     ],
     // マイナンバー / 口座 / 免許 / パスポート
     MY_NUMBER: [T("MY_NUMBER", /\b\d{4}\s*\d{4}\s*\d{4}\b/gu)],
-    BANK_ACCOUNT: [T("BANK_ACCOUNT", /(?:普通|当座|貯蓄)\s*(?:口座)?\s*(?:番号)?\s*[:：]?\s*\d{6,8}/gu)],
+    // 以前は 普通/当座/貯蓄 のいずれかが literal で必要だったため、
+    // 「口座番号 1234567」のような最も普通の書き方で 0 件だった。
+    BANK_ACCOUNT: [
+      T("BANK_ACCOUNT", /(?:普通|当座|貯蓄)\s*(?:口座)?\s*(?:番号)?\s*[:：]?\s*\d{6,8}/gu),
+      T("BANK_ACCOUNT", /(?:口座番号|口座\s*No\.?|Account\s*(?:Number|No\.?))\s*(?:は|[:：=＝])?\s*\d{6,8}(?!\d)/giu),
+    ],
     // 運転免許証番号 — 12 桁。区切りを必須にしている点が重要で、以前は
     // 全ての区切りが optional だったため実質 /\b\d{12}\b/ に退化し、
     // マイナンバー (同じ 12 桁) と完全に同一 span を取り合っていた。
@@ -153,6 +191,12 @@
     // 後から足した人が踏む罠なので、気づいた時点で分離しておく。
     SECRET: [
       T("SECRET", /(?:password|secret|token|api_key|apikey|access_token)\s*[=:]\s*\S{8,}/giu),
+      // URL に埋め込まれた認証情報。DB_CONNECTION はスキームを 6 個
+      // ハードコードしているので amqp / mssql / clickhouse 等を取りこぼす。
+      T("SECRET", /\b[a-z][a-z0-9+.\-]{1,20}:\/\/[^\s:@\/]{1,64}:[^\s@\/]{1,128}@[^\s"'<>、。]{1,255}/giu),
+      // .env / CI の変数ダンプ。キー名に秘密を示す語が入っているものだけ
+      // 拾うので、HOME=/root のような無害な行には当たらない。
+      T("SECRET", /(?:^|\n)\s*(?:export\s+)?[A-Za-z_][A-Za-z0-9_]{0,48}(?:SECRET|TOKEN|KEY|PASSWORD|PASSWD|PWD|CREDENTIAL|PRIVATE|APIKEY)[A-Za-z0-9_]{0,24}\s*=\s*(?:"[^"\n]{4,}"|'[^'\n]{4,}'|[^\s#\n]{4,})/giu),
       T("SECRET", /-----BEGIN(?:\s[A-Z]+)?\s(?:RSA|EC|OPENSSH|DSA|PGP)?\s?PRIVATE KEY-----[\s\S]*?-----END(?:\s[A-Z]+)?\s(?:RSA|EC|OPENSSH|DSA|PGP)?\s?PRIVATE KEY-----/gu),
     ],
     // DB 接続 / API キー / シークレット
@@ -194,6 +238,9 @@
       T("API_KEY", /\bya29\.[A-Za-z0-9_\-]{40,}/gu),
       // AWS — access key IDs (AKIA/ASIA/…)
       T("API_KEY", /\b(?:AKIA|ASIA|AROA|AIDA|ANPA|ANVA|APKA|ABIA|ACCA)[A-Z0-9]{16}\b/gu),
+      // AKIA… は「アクセスキー ID」で、実際に権限を持つのは secret 側。
+      // ID だけ隠しても意味が薄いので secret も拾う。
+      T("API_KEY", /(?:aws_secret_access_key|AWS_SECRET_ACCESS_KEY|secretAccessKey)\s*[=:]\s*["']?[A-Za-z0-9\/+=]{40}["']?/giu),
       // Hugging Face
       T("API_KEY", /\bhf_[A-Za-z0-9]{34,}\b/gu),
       // Stripe — secret / publishable / restricted (live|test) + webhook secret
@@ -294,6 +341,77 @@
         /(?<![\p{Script=Han}\p{Script=Katakana}A-Za-z0-9])(?:[A-Za-zＡ-Ｚａ-ｚ]|甲|乙|丙|丁)社(?![\p{Script=Han}])/gu,
       ),
     ],
+    // ---- 日本の事業者識別番号 ------------------------------------------
+    // 法人番号は文脈付きと裸の 2 形。裸の 13 桁は FP が高いので
+    // チェックディジット検証を必須にしている。
+    CORPORATE_NUMBER: [
+      T("CORPORATE_NUMBER", /(?:法人番号|会社法人等番号)\s*(?:は|[:：=＝])?\s*\d{13}(?!\d)/gu, corporateNumberValid),
+      T("CORPORATE_NUMBER", /(?<![\d\-/])[1-9]\d{12}(?![\d\-/])/gu, corporateNumberValid),
+    ],
+    // 適格請求書発行事業者登録番号 (インボイス制度, 2023-)。請求書に必須
+    // なので「この請求書を要約して」の形で日常的に貼られる。
+    // Tron の暗号資産アドレスも T 始まりなので、順序はこちらを先に。
+    INVOICE_REG_NUMBER: [
+      T("INVOICE_REG_NUMBER", /(?<![A-Za-z0-9])[Tt][\s\-‐]?\d{13}(?!\d)/gu),
+    ],
+
+    // ---- 社内ネットワーク ------------------------------------------------
+    MAC_ADDRESS: [
+      T("MAC_ADDRESS", /(?<![\w:.\-])(?:[0-9A-Fa-f]{2}[:\-]){5}[0-9A-Fa-f]{2}(?![\w:.\-])/gu),
+    ],
+    IP_CIDR: [
+      T("IP_CIDR", /(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}\/(?:3[0-2]|[12]?\d)(?![\d.])/gu),
+    ],
+    // 社内ホスト名。公開 TLD ではなく内部専用 TLD で終わるものだけ。
+    INTERNAL_HOSTNAME: [
+      T(
+        "INTERNAL_HOSTNAME",
+        /(?<![\w.\-])[a-z0-9][a-z0-9\-]{0,62}(?:\.[a-z0-9][a-z0-9\-]{0,62})*\.(?:local|internal|intranet|corp|lan|localdomain)(?![\w.\-])/giu,
+      ),
+    ],
+
+    // ---- 国際的な識別子 --------------------------------------------------
+    IBAN: [
+      T("IBAN", /(?<![A-Z0-9])[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){2,7}(?:[ ]?[A-Z0-9]{1,3})?(?![A-Z0-9])/gu, ibanValid),
+    ],
+    // 米国 SSN。先頭 000/666/9xx、中 00、末尾 0000 は発行されない。
+    // 広告で使われる予約帯 987-65-432x も除外する。
+    US_SSN: [
+      T("US_SSN", /(?<![\d\-])(?!000|666|9\d\d)(?!987-65-432)\d{3}-(?!00)\d{2}-(?!0000)\d{4}(?![\d\-])/gu),
+    ],
+    // 英国 NINO。HMRC が発行しない接頭字 (D/F/I/Q/U/V 始まり、O 2文字目) を除外。
+    UK_NINO: [
+      T("UK_NINO", /(?<![A-Z0-9])[ABCEGHJ-PRSTW-Z][ABCEGHJ-NPRSTW-Z]\s?\d{2}\s?\d{2}\s?\d{2}\s?[A-D](?![A-Z0-9])/gu),
+    ],
+
+    // ---- 暗号資産 --------------------------------------------------------
+    // 拡張秘密鍵 (*prv) はウォレット全体の掌握に直結するので最優先。
+    CRYPTO_ADDRESS: [
+      T("CRYPTO_ADDRESS", /(?<![A-Za-z0-9])(?:xprv|yprv|zprv|xpub|ypub|zpub)[1-9A-HJ-NP-Za-km-z]{100,112}(?![A-Za-z0-9])/gu),
+      T("CRYPTO_ADDRESS", /(?<![A-Za-z0-9])bc1[02-9ac-hj-np-z]{11,71}(?![A-Za-z0-9])/gu),
+      T("CRYPTO_ADDRESS", /(?<![A-Za-z0-9])0x[a-fA-F0-9]{40}(?![A-Za-z0-9])/gu),
+    ],
+
+    // ---- 貼り付けの形そのものが PII を運ぶケース --------------------------
+    // 転送メールのヘッダ貼り付けは、1 回で最も多くの PII が流入する経路。
+    EMAIL_HEADER: [
+      T("EMAIL_HEADER", /(?:^|\n)(?:From|To|Cc|Bcc|Reply-To|Message-ID)\s*:\s*[^\n]{3,200}/giu),
+    ],
+    COOKIE_HEADER: [
+      T("COOKIE_HEADER", /(?:^|\n)(?:Set-)?Cookie\s*:\s*[^\n]{8,}/giu),
+    ],
+    // スタックトレースを貼ると OS ユーザー名がほぼ必ず混入する。
+    LOCAL_USER_PATH: [
+      T("LOCAL_USER_PATH", /(?:[A-Za-z]:\\Users\\|\/(?:home|Users)\/)[A-Za-z0-9._\-]{2,32}(?![A-Za-z0-9._\-])/gu),
+    ],
+    // API レスポンスのデバッグは開発者の最頻用途。PII キーの値だけ拾う。
+    PII_JSON_FIELD: [
+      T(
+        "PII_JSON_FIELD",
+        /"(?:e?mail(?:_?address)?|phone(?:_?number)?|tel|ssn|my_?number|address|birth(?:day|date)|dob|password|token)"\s*:\s*"[^"]{1,200}"/giu,
+      ),
+    ],
+
     // 業務文書系
     // ラベル語 (顧客番号 / 契約番号 …) の直後の区切りは optional。
     // 以前は \s*[:：=]\s* が必須だったため、日本語で自然な

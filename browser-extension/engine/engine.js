@@ -118,17 +118,28 @@
   //      detections are hardcoded to 1.0 (collectDetections) while ML
   //      forwards a softmax < 1.0 (onnx-detector.js), so ranking by
   //      score would always shrink a full name back to its fragment.
-  //   3. higher score, then entity_type — only to make the outcome
-  //      deterministic when two rules match the exact same span
-  //      (e.g. a bare 12-digit run is both MY_NUMBER and
+  //   3. higher severity — a URL carrying embedded credentials matches
+  //      both URL (medium) and SECRET (critical) over the same span, and
+  //      settling that by label name would quietly downgrade a
+  //      credential leak to a link. On a genuine tie, fail safe.
+  //   4. higher score, then entity_type — only to make the outcome
+  //      deterministic when two rules of equal severity match the exact
+  //      same span (e.g. a bare 12-digit run is both MY_NUMBER and
   //      DRIVERS_LICENSE). Without a total order the two entry points
   //      can disagree on the label for one span.
   function resolveOverlaps(results) {
     if (results.length < 2) return results.slice();
+    const deps = resolveDeps();
+    const sevRank = (label) => {
+      if (!deps.severity) return 99;
+      const idx = deps.severity.SEVERITY_ORDER.indexOf(deps.severity.severityFor(label));
+      return idx === -1 ? 99 : idx; // 0 = critical
+    };
     const ordered = results.slice().sort(
       (a, b) =>
         a.start - b.start ||
         (b.end - b.start) - (a.end - a.start) ||
+        sevRank(a.entity_type) - sevRank(b.entity_type) ||
         b.score - a.score ||
         (a.entity_type < b.entity_type ? -1 : a.entity_type > b.entity_type ? 1 : 0),
     );

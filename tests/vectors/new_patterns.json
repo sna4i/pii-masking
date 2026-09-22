@@ -1,0 +1,144 @@
+{
+  "label_groups": ["SECRET", "API_KEY", "CORPORATE_NUMBER", "INVOICE_REG_NUMBER", "MAC_ADDRESS", "IP_CIDR", "INTERNAL_HOSTNAME", "BANK_ACCOUNT", "IBAN", "US_SSN", "UK_NINO", "CRYPTO_ADDRESS", "EMAIL_HEADER", "COOKIE_HEADER", "LOCAL_USER_PATH", "PII_JSON_FIELD"],
+  "cases": [
+    {
+      "name": "credentials embedded in a URL",
+      "input": "接続は https://admin:P@ssw0rd@internal.example.com/ から",
+      "expected": [{ "label": "SECRET" }]
+    },
+    {
+      "name": "dotenv assignment gated on the key name",
+      "input": "export STRIPE_SECRET_KEY=sk_live_abcdefghijklmnop",
+      "expected": [{ "label": "SECRET" }]
+    },
+    {
+      "name": "negative — dotenv line with a harmless key name",
+      "input": "HOME=/root",
+      "expected_absent": [{ "label": "SECRET" }]
+    },
+    {
+      "name": "AWS secret access key, not just the key ID",
+      "input": "aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+      "expected": [{ "label": "API_KEY" }]
+    },
+    {
+      "name": "corporate number with context",
+      "input": "法人番号は 7000012050002 です",
+      "expected": [{ "label": "CORPORATE_NUMBER" }]
+    },
+    {
+      "name": "negative — corporate number with a bad check digit",
+      "input": "法人番号は 7000012050003 です",
+      "expected_absent": [{ "label": "CORPORATE_NUMBER" }]
+    },
+    {
+      "name": "invoice registration number",
+      "input": "登録番号 T7000012050002 を記載",
+      "expected": [{ "label": "INVOICE_REG_NUMBER", "text": "T7000012050002" }]
+    },
+    {
+      "name": "MAC address",
+      "input": "MACは 00:1B:44:11:3A:B7 です",
+      "expected": [{ "label": "MAC_ADDRESS", "text": "00:1B:44:11:3A:B7" }]
+    },
+    {
+      "name": "negative — short colon-separated hex is not a MAC",
+      "input": "時刻 12:34:56 に実行",
+      "expected_absent": [{ "label": "MAC_ADDRESS" }]
+    },
+    {
+      "name": "CIDR block",
+      "input": "許可レンジは 10.0.0.0/8 です",
+      "expected": [{ "label": "IP_CIDR", "text": "10.0.0.0/8" }]
+    },
+    {
+      "name": "internal hostname",
+      "input": "gitlab.corp と db01.prod.local に接続",
+      "expected": [
+        { "label": "INTERNAL_HOSTNAME", "text": "gitlab.corp" },
+        { "label": "INTERNAL_HOSTNAME", "text": "db01.prod.local" }
+      ]
+    },
+    {
+      "name": "negative — public domain is not an internal hostname",
+      "input": "example.com を参照",
+      "expected_absent": [{ "label": "INTERNAL_HOSTNAME" }]
+    },
+    {
+      "name": "bank account without the 普通/当座 prefix",
+      "input": "口座番号 1234567 へ振込",
+      "expected": [{ "label": "BANK_ACCOUNT" }]
+    },
+    {
+      "name": "IBAN",
+      "input": "IBAN: DE89370400440532013000",
+      "expected": [{ "label": "IBAN", "text": "DE89370400440532013000" }]
+    },
+    {
+      "name": "negative — IBAN with a bad checksum",
+      "input": "IBAN: DE89370400440532013001",
+      "expected_absent": [{ "label": "IBAN" }]
+    },
+    {
+      "name": "US SSN",
+      "input": "SSN 123-45-6789 on file",
+      "expected": [{ "label": "US_SSN", "text": "123-45-6789" }]
+    },
+    {
+      "name": "negative — SSA reserved advertising range",
+      "input": "sample 987-65-4320 only",
+      "expected_absent": [{ "label": "US_SSN" }]
+    },
+    {
+      "name": "UK national insurance number",
+      "input": "NINO AB123456C on record",
+      "expected": [{ "label": "UK_NINO", "text": "AB123456C" }]
+    },
+    {
+      "name": "negative — HMRC-invalid NINO prefix",
+      "input": "code QQ123456C here",
+      "expected_absent": [{ "label": "UK_NINO" }]
+    },
+    {
+      "name": "bitcoin bech32 address",
+      "input": "送金先 bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
+      "expected": [{ "label": "CRYPTO_ADDRESS" }]
+    },
+    {
+      "name": "extended private key",
+      "input": "xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi",
+      "expected": [{ "label": "CRYPTO_ADDRESS" }]
+    },
+    {
+      "name": "ethereum address",
+      "input": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e に送付",
+      "expected": [{ "label": "CRYPTO_ADDRESS" }]
+    },
+    {
+      "name": "forwarded mail header block",
+      "input": "From: tanaka@example.co.jp\nTo: sato@example.co.jp\n本文です",
+      "expected": [{ "label": "EMAIL_HEADER" }]
+    },
+    {
+      "name": "cookie header",
+      "input": "Cookie: session_id=abcdef123456; path=/",
+      "expected": [{ "label": "COOKIE_HEADER" }]
+    },
+    {
+      "name": "local user path leaks the OS username",
+      "input": "エラーは /Users/yuya4i/project/main.js で発生",
+      "expected": [{ "label": "LOCAL_USER_PATH", "text": "/Users/yuya4i" }]
+    },
+    {
+      "name": "windows local user path",
+      "input": "C:\\Users\\tanaka\\Desktop\\a.txt を開く",
+      "expected": [{ "label": "LOCAL_USER_PATH" }]
+    },
+    {
+      "name": "PII-keyed JSON field",
+      "input": "{\"email\": \"taro@example.com\", \"note\": \"hello\"}",
+      "expected": [{ "label": "PII_JSON_FIELD" }],
+      "expected_absent": [{ "label": "PII_JSON_FIELD", "text": "\"note\": \"hello\"" }]
+    }
+  ]
+}

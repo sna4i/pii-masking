@@ -75,6 +75,34 @@ test("applyTagMask never emits a partially overwritten placeholder", () => {
   );
 });
 
+test("identical spans resolve to the more severe label", () => {
+  // Two rules matching the same span must not be settled by label name,
+  // or a credential leak silently downgrades to whatever sorts first.
+  // DATE (low) vs SECRET (critical) is chosen deliberately: alphabetical
+  // order picks the WRONG one here, so this fails unless severity is
+  // actually consulted. (URL vs SECRET would pass by luck.)
+  const kept = engine.resolveOverlaps([
+    det("DATE", 0, 20, "2026-01-01 00:00:00", 1.0),
+    det("SECRET", 0, 20, "2026-01-01 00:00:00", 1.0),
+  ]);
+
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0].entity_type, "SECRET");
+});
+
+test("severity tie-break does not override the longer span", () => {
+  // Severity only breaks ties. A longer medium-severity span must still
+  // beat a shorter critical one, or ML full-name spans would collapse
+  // back to their dictionary fragments.
+  const kept = engine.resolveOverlaps([
+    det("URL", 0, 30, "https://example.com/a/b/c/dddd", 1.0),
+    det("SECRET", 0, 10, "https://ex", 1.0),
+  ]);
+
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0].entity_type, "URL");
+});
+
 test("maskAggregated and maskSanitize agree on the label for one span", async () => {
   // A bare 12-digit run matches both MY_NUMBER and DRIVERS_LICENSE over
   // the identical span. Whichever wins, both entry points must agree —
