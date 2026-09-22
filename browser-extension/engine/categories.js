@@ -62,6 +62,8 @@
     // USER_DEFINED_* — drop-registered user force-mask list.
     // ---- v1.3.1 で追加した検出ラベル ----
     BUSINESS_CONFIDENTIAL: "OTHER",
+    SCHOOL_NAME: "LOCATION",
+    DEVICE_ID: "INTERNAL_ID",
     CORPORATE_NUMBER: "ORGANIZATION",
     INVOICE_REG_NUMBER: "FINANCIAL",
     MAC_ADDRESS: "CONTACT",

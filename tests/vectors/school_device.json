@@ -1,0 +1,23 @@
+{
+  "label_groups": ["SCHOOL_NAME", "DEVICE_ID"],
+  "cases": [
+    { "name": "elementary school with ward prefix",
+      "input": "学校名：渋谷区立テスト小学校",
+      "expected": [{ "label": "SCHOOL_NAME", "text": "渋谷区立テスト小学校" }] },
+    { "name": "nursery under a labelled field",
+      "input": "保育施設名：サンプルこども園",
+      "expected": [{ "label": "SCHOOL_NAME", "text": "サンプルこども園" }] },
+    { "name": "private high school",
+      "input": "卒業校は私立サンプル高等学校です",
+      "expected": [{ "label": "SCHOOL_NAME", "text": "私立サンプル高等学校" }] },
+    { "name": "negative — 学校 as a common noun",
+      "input": "学校の制度について教えてください",
+      "expected_absent": [{ "label": "SCHOOL_NAME" }] },
+    { "name": "device identifier",
+      "input": "端末識別子：DEVICE-TEST-A81F92C0",
+      "expected": [{ "label": "DEVICE_ID" }] },
+    { "name": "negative — ordinary hyphenated word",
+      "input": "設定は TEST-MODE です",
+      "expected_absent": [{ "label": "DEVICE_ID" }] }
+  ]
+}

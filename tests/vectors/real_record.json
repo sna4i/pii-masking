@@ -1,0 +1,64 @@
+{
+  "label_groups": ["MY_NUMBER", "POSTAL_CODE", "PHONE_NUMBER", "DATE", "DRIVERS_LICENSE", "JP_SURNAME", "KATAKANA_NAME"],
+  "cases": [
+    {
+      "name": "My Number written with hyphens",
+      "input": "マイナンバー相当テスト番号：1234-5678-9012",
+      "expected": [{ "label": "MY_NUMBER", "text": "1234-5678-9012" }],
+      "expected_absent": [{ "label": "POSTAL_CODE" }]
+    },
+    {
+      "name": "My Number does not span a line break",
+      "input": "Customer profile accessed: C-00045872\n2026-09-22 18:15:35 INFO",
+      "expected_absent": [{ "label": "MY_NUMBER" }]
+    },
+    {
+      "name": "postal code does not match inside an order number",
+      "input": "注文番号ORD-20260920-785412の商品について",
+      "expected_absent": [{ "label": "POSTAL_CODE" }]
+    },
+    {
+      "name": "postal code still matches on its own",
+      "input": "郵便番号：〒150-9999",
+      "expected": [{ "label": "POSTAL_CODE", "text": "〒150-9999" }]
+    },
+    {
+      "name": "driver's licence number with its context word",
+      "input": "運転免許証番号：第123456789012号",
+      "expected": [{ "label": "DRIVERS_LICENSE" }],
+      "expected_absent": [{ "label": "MY_NUMBER" }]
+    },
+    {
+      "name": "space-separated full name in a labelled field",
+      "input": "氏名：山田 太郎",
+      "expected": [{ "label": "JP_SURNAME", "text": "山田 太郎" }]
+    },
+    {
+      "name": "katakana reading in a フリガナ field",
+      "input": "フリガナ：ヤマダ タロウ",
+      "expected": [{ "label": "KATAKANA_NAME", "text": "ヤマダ タロウ" }]
+    },
+    {
+      "name": "same person gets the same placeholder either way",
+      "input": "氏名：山田 太郎\n担当の山田太郎様より連絡",
+      "expected_aggregated": [],
+      "mode": "detection",
+      "expected": [{ "label": "JP_SURNAME" }]
+    },
+    {
+      "name": "phone number does not match inside a longer digit run",
+      "input": "ID 12034-1234-56789 を確認",
+      "expected_absent": [{ "label": "PHONE_NUMBER" }]
+    },
+    {
+      "name": "date does not match inside a longer digit run",
+      "input": "参照 920260920-7854121 の件",
+      "expected_absent": [{ "label": "DATE" }]
+    },
+    {
+      "name": "ordinary date still matches",
+      "input": "登録日は2024年4月10日です",
+      "expected": [{ "label": "DATE", "text": "2024年4月10日" }]
+    }
+  ]
+}
