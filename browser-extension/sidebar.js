@@ -425,6 +425,53 @@
     }
 
     /* --- Custom scrollbar -------------------------------------------- */
+    /* 機密の可能性がある文の警告。マスク候補ではないので、カテゴリ一覧と
+       混ざらないよう独立したブロックとして上に置く。左の太い罫で
+       「これは操作するものではなく読むもの」と示す。 */
+    .confidential-warning {
+      flex: 0 0 auto;
+      margin: 0 0 10px;
+      padding: 10px 12px;
+      border-left: 3px solid var(--sev-high);
+      border-radius: 4px;
+      background: var(--sev-high-bg, rgba(217, 119, 6, 0.08));
+    }
+    .confidential-warning-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--sev-high);
+      margin-bottom: 4px;
+    }
+    .confidential-warning-lead {
+      margin: 0 0 8px;
+      font-size: 11px;
+      line-height: 1.5;
+      opacity: 0.85;
+    }
+    .confidential-item {
+      margin-bottom: 8px;
+      padding-left: 8px;
+      border-left: 1px solid rgba(127, 127, 127, 0.35);
+    }
+    .confidential-item:last-of-type { margin-bottom: 0; }
+    .confidential-quote {
+      font-size: 12px;
+      line-height: 1.55;
+      word-break: break-word;
+    }
+    .confidential-why {
+      margin-top: 3px;
+      font-size: 10px;
+      opacity: 0.7;
+      word-break: break-word;
+    }
+    .confidential-warning-note {
+      margin: 8px 0 0;
+      font-size: 10px;
+      line-height: 1.5;
+      opacity: 0.6;
+    }
+
     .categories {
       flex: 1 1 auto;
       min-height: 0;
@@ -1378,10 +1425,17 @@
         ? aggregatedResponse.force_masked_categories.map(String)
         : []
     );
+    // 「意味として機密」な文 (engine/confidential.js)。マスク対象では
+    // ないので aggregated とは別枠で受け取り、警告としてだけ描画する。
+    const confidentialHits = Array.isArray(aggregatedResponse?.confidential)
+      ? aggregatedResponse.confidential
+      : [];
 
     // Short-circuit only when nothing to review AND no background LLM
     // work in flight — otherwise we'd miss entities the LLM will add.
-    if (aggregated.length === 0 && !llmPending) {
+    // 機密警告だけがある場合も開く: マスクすべき span はゼロでも
+    // 「この文は送っていいのか」を問う価値があるのがこの機能の要点。
+    if (aggregated.length === 0 && confidentialHits.length === 0 && !llmPending) {
       return {
         accepted: true,
         maskedEntityKeys: new Set(),
@@ -2355,6 +2409,57 @@
       // the preview below stays pinned in view. We create an empty
       // wrapper here — applyAggregated() below fills it, and re-fills
       // it when the LLM augmentation resolves.
+      // --- 機密の可能性がある文の警告 (engine/confidential.js) ------------
+      // マスク候補の一覧より **上** に、カテゴリとは独立して出す。
+      // これらは置換しない — 置換すると送りたい文そのものが壊れるので、
+      // 「送る前に読み直して」とだけ伝えるのがこの UI の役割。
+      if (confidentialHits.length > 0) {
+        const warn = document.createElement("div");
+        warn.className = "confidential-warning";
+        const h = document.createElement("div");
+        h.className = "confidential-warning-title";
+        h.textContent = `⚠ 機密の可能性がある記述が ${confidentialHits.length} 件`;
+        warn.appendChild(h);
+
+        const lead = document.createElement("p");
+        lead.className = "confidential-warning-lead";
+        lead.textContent =
+          "以下はマスクされません。送信してよいか確認してください。";
+        warn.appendChild(lead);
+
+        for (const hit of confidentialHits) {
+          const item = document.createElement("div");
+          item.className = "confidential-item";
+
+          const quote = document.createElement("div");
+          quote.className = "confidential-quote";
+          quote.textContent = hit.text.trim();
+          item.appendChild(quote);
+
+          // なぜ引っかかったかを必ず見せる。理由の見えない警告は
+          // 「また出た」で無視されるようになる。
+          const why = document.createElement("div");
+          why.className = "confidential-why";
+          const reasons = [];
+          if (hit.signals?.explicit) reasons.push(`機密表示: ${hit.signals.explicit}`);
+          if (hit.signals?.topic) reasons.push(`話題: ${hit.signals.topic}`);
+          if (hit.signals?.secrecy) reasons.push(`非公開: ${hit.signals.secrecy}`);
+          if (hit.signals?.prospective) reasons.push(`未確定: ${hit.signals.prospective}`);
+          why.textContent = reasons.join(" / ");
+          if (reasons.length > 0) item.appendChild(why);
+
+          warn.appendChild(item);
+        }
+
+        const note = document.createElement("p");
+        note.className = "confidential-warning-note";
+        note.textContent =
+          "明示的な機密表示と定型的な言い回しのみ検出します。言い換えられた機密は検出できません。";
+        warn.appendChild(note);
+
+        body.appendChild(warn);
+      }
+
       const categoriesWrap = document.createElement("div");
       categoriesWrap.className = "categories";
       body.appendChild(categoriesWrap);
