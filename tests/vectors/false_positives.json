@@ -1,0 +1,53 @@
+{
+  "label_groups": ["ADDRESS", "PREFECTURE_CITY", "GENDER", "BLOOD_TYPE", "KATAKANA_NAME"],
+  "cases": [
+    {
+      "name": "ADDRESS stops at the particle, not the end of the sentence",
+      "input": "兵庫県明石市の事務所にいらっしゃいました",
+      "expected": [{ "label": "PREFECTURE_CITY", "text": "兵庫県明石市" }],
+      "expected_absent": [
+        { "label": "ADDRESS", "text": "兵庫県明石市の事務所にいらっしゃいました" }
+      ]
+    },
+    {
+      "name": "ADDRESS does not fire on 隣の県",
+      "input": "本件は隣の県の市場で検証する",
+      "expected_absent": [{ "label": "ADDRESS" }, { "label": "PREFECTURE_CITY" }]
+    },
+    {
+      "name": "ADDRESS still captures a real street address",
+      "input": "兵庫県明石市大久保町大窪1234-5 に送付",
+      "expected": [{ "label": "ADDRESS", "text": "兵庫県明石市大久保町大窪1234-5" }]
+    },
+    {
+      "name": "GENDER does not fire on その他",
+      "input": "対応方針: その他 の項目を確認",
+      "expected_absent": [{ "label": "GENDER" }]
+    },
+    {
+      "name": "GENDER does not fire inside a compound word",
+      "input": "男性ホルモンの分泌と女性誌の記事について",
+      "expected_absent": [{ "label": "GENDER" }]
+    },
+    {
+      "name": "GENDER still fires when standalone",
+      "input": "性別: 男性",
+      "expected": [{ "label": "GENDER", "text": "男性" }]
+    },
+    {
+      "name": "BLOOD_TYPE does not fire on A型肝炎",
+      "input": "A型肝炎のワクチンを接種した",
+      "expected_absent": [{ "label": "BLOOD_TYPE" }]
+    },
+    {
+      "name": "BLOOD_TYPE still fires with a blood context",
+      "input": "血液型はAB型です",
+      "expected": [{ "label": "BLOOD_TYPE", "text": "AB型" }]
+    },
+    {
+      "name": "KATAKANA_NAME does not fire on ordinary loanwords",
+      "input": "アプリケーションのインストール手順とワクチンの説明",
+      "expected_absent": [{ "label": "KATAKANA_NAME" }]
+    }
+  ]
+}

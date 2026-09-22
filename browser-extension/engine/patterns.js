@@ -20,6 +20,28 @@
   const T = (entity_type, pattern, validate) =>
     validate ? { entity_type, pattern, validate } : { entity_type, pattern };
 
+  // ---- 住所 ------------------------------------------------------------
+  // 以前は都道府県を `.{2,3}県` というワイルドカードで書いていたため
+  // 「隣の県」が都道府県として通り、続く `[^\s、。,]{0,20}` が貪欲に
+  // 助詞や動詞まで飲み込んでいた:
+  //   本件は隣の県の市場で検証する -> ADDRESS「は隣の県の市場で検証する」
+  //   兵庫県明石市の事務所に…      -> ADDRESS「兵庫県明石市の事務所に…」
+  // dictionaries.js が持つ 47 都道府県の正確なリストで anchor し、街区
+  // 部分に使える文字を住所に出うるものだけに制限する。
+  const PREF_ALT = dicts
+    ? dicts.JP_PREFECTURES.join("|")
+    : "北海道|東京都|京都府|大阪府";
+  // 市区町村。[市区町村郡] を除外した char class で「最初の suffix」で止める。
+  const CITY_PART = "[^\\s、。,市区町村郡]{1,6}[市区町村郡]";
+  // 街区 (町名・丁目・番地)。先頭は漢字/カタカナ/数字に限る — ここを
+  // 「の」始まりまで許すと「明石市の事務所」を住所として飲んでしまう。
+  // 2 文字目以降は「丸の内」のような地名のために「の」を許す。
+  const STREET_PART =
+    "[\\p{Script=Han}\\p{Script=Katakana}0-9０-９]" +
+    "[\\p{Script=Han}\\p{Script=Katakana}0-9０-９ーの\\-‐－]*";
+  const PREFECTURE_CITY_RE = new RegExp(`(?:${PREF_ALT})${CITY_PART}`, "gu");
+  const ADDRESS_RE = new RegExp(`(?:${PREF_ALT})${CITY_PART}${STREET_PART}`, "gu");
+
   // Luhn (ISO/IEC 7812-1) check digit — every payment card carries one.
   function luhnValid(surface) {
     const digits = surface.replace(/\D/g, "");
@@ -44,17 +66,14 @@
     // 止まるようにしている。これがないと「明石市大久保町」のように
     // 町名まで貪欲に飲み込まれる。street が続くフル住所は ADDRESS が
     // longer span を取るため衝突しない。
-    PREFECTURE_CITY: [
-      T(
-        "PREFECTURE_CITY",
-        /(?:北海道|(?:東京|京都|大阪)(?:都|府)|.{2,3}県)(?:[^\s、。,市区町村郡]{1,6}[市区町村郡])/gu,
-      ),
-    ],
-    // 住所 (番地まで含むフル住所)
-    ADDRESS: [T("ADDRESS", /(?:北海道|(?:東京|京都|大阪)(?:都|府)|.{2,3}県)(?:[^\s、。,]{1,6}[市区町村郡])[^\s、。,]{0,20}/gu)],
+    PREFECTURE_CITY: [T("PREFECTURE_CITY", PREFECTURE_CITY_RE)],
+    // 住所 (町名・番地まで含むフル住所)。PREFECTURE_CITY + 街区部分。
+    ADDRESS: [T("ADDRESS", ADDRESS_RE)],
     // 年齢 / 性別
     AGE: [T("AGE", /\d{1,3}\s*(?:歳|才)/gu)],
-    GENDER: [T("GENDER", /(?:男性|女性|その他)/gu)],
+    // 「その他」は業務文書で最頻出の語なので性別ラベルから外す。
+    // 後続が漢字/カタカナなら複合語 (男性ホルモン / 女性誌) とみなす。
+    GENDER: [T("GENDER", /(?:男性|女性)(?![\p{Script=Han}\p{Script=Katakana}ー])/gu)],
     // 金額
     MONETARY_AMOUNT: [
       T("MONETARY_AMOUNT", /[¥￥]\s*[\d,]+(?:\.\d+)?(?:\s*円)?/gu),
@@ -251,7 +270,8 @@
       T("SKU", /\bSKU[_\-][\w\-]{3,20}\b/gu),
       T("SKU", /(?:製品|商品)(?:コード|番号)\s*[:：=]\s*[\w\-]+/gu),
     ],
-    BLOOD_TYPE: [T("BLOOD_TYPE", /(?:AB|A|B|O)型/gu)],
+    // 後続が漢字/カタカナなら別語 (A型肝炎 / B型インフルエンザ) とみなす。
+    BLOOD_TYPE: [T("BLOOD_TYPE", /(?:AB|A|B|O)型(?![\p{Script=Han}\p{Script=Katakana}ー])/gu)],
     ANNUAL_INCOME: [
       T("ANNUAL_INCOME", /年収\s*[\d,]+\s*万?円?/gu),
       T("ANNUAL_INCOME", /月収\s*[\d,]+\s*万?円?/gu),
