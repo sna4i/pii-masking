@@ -19,9 +19,10 @@
       load("blocklist", "./blocklist");
       load("userForceMask", "./user-force-mask");
       load("onnxDetector", "./onnx-detector");
+      load("confidential", "./confidential");
     }
     const ns = (root && root.__localMaskMCP && root.__localMaskMCP.engine) || {};
-    for (const k of ["patterns","classification","severity","categories","aggregate","forceMask","blocklist","userForceMask","onnxDetector"]) {
+    for (const k of ["patterns","classification","severity","categories","aggregate","forceMask","blocklist","userForceMask","onnxDetector","confidential"]) {
       d[k] = d[k] || ns[k];
     }
     return d;
@@ -206,6 +207,29 @@
     return finishPipeline(dets, opts, deps);
   }
 
+  // 「意味として機密」な文の警告。**検出 span とは別枠で返す**。
+  //
+  // これを aggregated に混ぜると、サイドバーは文まるごとをマスク候補
+  // として並べてしまう。買収交渉の一文を置換したらプロンプトが壊れる
+  // ので、ADDRESS が文を飲み込んでいたバグと同じ失敗になる。
+  // あくまで「送る前に見直して」の警告として別フィールドに置き、
+  // 同じ文の中の社名・金額・人名は通常の span 検出側がマスクする。
+  //
+  // opts.confidentialEnabled === false で無効化できる (既定は有効)。
+  // hold-out 実測で precision 1.00 / recall 0.40 — 誤警告はほぼ出ない
+  // 代わりに、言い換えの 6 割は取りこぼす。
+  function collectConfidential(text, opts, deps) {
+    if (opts.confidentialEnabled === false) return [];
+    if (!deps.confidential) return [];
+    try {
+      return deps.confidential.detectConfidential(text, {
+        threshold: opts.confidentialThreshold,
+      });
+    } catch (_) {
+      return [];
+    }
+  }
+
   // /v1/extension/sanitize/aggregated.
   // Returns a Promise when opts.mlEnabled is true (ML inference is
   // async via the SW), otherwise returns the result synchronously
@@ -227,7 +251,11 @@
     const fired = deps.forceMask.detectForceMaskTrigger(text, kws);
     const forced = deps.forceMask.resolveForcedCategories(fired, cats);
     agg = deps.forceMask.applyForceMask(agg, forced);
-    return { original_text: text, aggregated: agg, audit_id: generateAuditId(), force_masked_categories: forced };
+    return {
+      original_text: text, aggregated: agg, audit_id: generateAuditId(),
+      force_masked_categories: forced,
+      confidential: collectConfidential(text, opts, deps),
+    };
   }
 
   // /v1/extension/sanitize. Same Promise-uniform shape as maskAggregated.
@@ -247,6 +275,7 @@
       audit_id: generateAuditId(), filter_enabled: true,
       original_length: text.length, sanitized_text: sanitized,
       detections: enriched, forwarded: false,
+      confidential: collectConfidential(text, opts, deps),
     };
   }
 

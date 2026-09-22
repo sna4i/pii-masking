@@ -9,6 +9,9 @@
     "credential",
     "attribute",
     "other",
+    // 文単位の「意味として機密」判定 (confidential.js)。
+    // span 検出ではないので既存クラスに混ぜず独立させる。
+    "semantic",
   ];
 
   const LABEL_TO_CLASSIFICATION = {
@@ -46,6 +49,7 @@
     INTERNAL_ID: "identifier",
     DEPARTMENT: "identifier",
     // USER_DEFINED_* — classification は category 系統を踏襲。
+    BUSINESS_CONFIDENTIAL: "semantic",
     CORPORATE_NUMBER: "identifier",
     INVOICE_REG_NUMBER: "identifier",
     MAC_ADDRESS: "identifier",
