@@ -45,7 +45,13 @@ async function runCase(vector, caseDef) {
     };
   }
 
-  const result = await engine.maskAggregated(input);
+  // A case may narrow the engine the way a caller would, e.g. to prove a
+  // label survives its neighbours' category being switched off.
+  const opts = {};
+  if (Array.isArray(caseDef.disabled_categories)) {
+    opts.disabledCategories = caseDef.disabled_categories;
+  }
+  const result = await engine.maskAggregated(input, opts);
   const aggregated = result.aggregated || [];
   const errors = [];
 

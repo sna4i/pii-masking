@@ -92,7 +92,8 @@
     COMPANY: [
       T(
         "COMPANY",
-        /(?:株式会社|有限会社|合同会社|一般社団法人|一般財団法人|NPO法人|学校法人|医療法人)\s*[\p{Script=Katakana}\p{Script=Han}A-Za-z0-9・ー＆&\-]{1,20}/gu,
+        // 法人格の直後が一般名詞のときは社名ではない (株式会社設立の件)。
+        /(?:株式会社|有限会社|合同会社|一般社団法人|一般財団法人|NPO法人|学校法人|医療法人)\s*(?!設立|登記|概要|制度|一覧|様|御中|各位|とは|について)[\p{Script=Katakana}\p{Script=Han}A-Za-z0-9・ー＆&\-]{1,20}/gu,
       ),
       T(
         "COMPANY",
@@ -104,8 +105,12 @@
       ),
     ],
     // 通信
-    IP_ADDRESS: [T("IP_ADDRESS", /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/gu)],
-    URL: [T("URL", /https?:\/\/[^\s<>"'、。）]+/gu)],
+    // オクテットを 0-255 に制限。以前は \d{1,3} だったため
+    // 999.888.777.666 や Node の v22.16.0 まで IP として拾っていた。
+    IP_ADDRESS: [T("IP_ADDRESS", /(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?![\d.])/gu)],
+    // 末尾 1 文字を「句読点でない」に強制することで、文末の . や
+    // 閉じ括弧を URL に巻き込まない (https://example.com/a. → …/a)。
+    URL: [T("URL", /https?:\/\/[^\s<>"'、。）)]*[^\s<>"'、。）).,;:!?！？]/gu)],
     // クレジットカード — IIN で絞ったうえで Luhn 検証する。
     //
     // 以前は patterns.js にパターン自体が無く (categories / severity /
@@ -139,6 +144,17 @@
     // 食い違う。区切り無しの 12 桁は MY_NUMBER に委ねる。
     DRIVERS_LICENSE: [T("DRIVERS_LICENSE", /\b\d{2}[\s-]\d{2}[\s-]\d{6}[\s-]\d{2}\b/gu)],
     PASSPORT: [T("PASSPORT", /\b[A-Z]{2}\d{7}\b/gu)],
+    // シークレット — API_KEY とは独立したカテゴリに置く。
+    //
+    // 以前はこの 2 本が API_KEY: 配列の中に物理的に同居していたため、
+    // getPresetPatterns に disabledCategories:["API_KEY"] を渡すと
+    // PEM 秘密鍵の検出まで道連れで消えた。現状この引数は UI から
+    // 渡されていないので実害は出ていないが、カテゴリ絞り込みの UI を
+    // 後から足した人が踏む罠なので、気づいた時点で分離しておく。
+    SECRET: [
+      T("SECRET", /(?:password|secret|token|api_key|apikey|access_token)\s*[=:]\s*\S{8,}/giu),
+      T("SECRET", /-----BEGIN(?:\s[A-Z]+)?\s(?:RSA|EC|OPENSSH|DSA|PGP)?\s?PRIVATE KEY-----[\s\S]*?-----END(?:\s[A-Z]+)?\s(?:RSA|EC|OPENSSH|DSA|PGP)?\s?PRIVATE KEY-----/gu),
+    ],
     // DB 接続 / API キー / シークレット
     DB_CONNECTION: [
       T("DB_CONNECTION", /(?:mysql|postgresql|postgres|mongodb|redis|sqlite):\/\/[^\s]+/gu),
@@ -152,7 +168,6 @@
       // ベンダー固有プレフィックス (AKIA / ghp_ / SG.) は大文字小文字が
       // 仕様の一部なので ``i`` を付けない — 付けると精度が落ちる。
       T("API_KEY", /(?:sk|pk|api[_\-]?key|access[_\-]?key)[_\-][\w\-]{20,}/giu),
-      T("SECRET", /(?:password|secret|token|api_key|apikey|access_token)\s*[=:]\s*\S{8,}/giu),
 
       // --- Vendor-specific well-known token formats ------------------
       // Patterns below anchor on the exact prefix each vendor uses
@@ -223,8 +238,6 @@
       T("API_KEY", /\bBearer\s+[A-Za-z0-9\-_.~+/]{16,}=*/giu),
       // Generic "Authorization:" header value
       T("API_KEY", /(?:Authorization|X-Api-Key)\s*:\s*\S{16,}/giu),
-      // PEM private keys (RSA / EC / OpenSSH / generic)
-      T("SECRET", /-----BEGIN(?:\s[A-Z]+)?\s(?:RSA|EC|OPENSSH|DSA|PGP)?\s?PRIVATE KEY-----[\s\S]*?-----END(?:\s[A-Z]+)?\s(?:RSA|EC|OPENSSH|DSA|PGP)?\s?PRIVATE KEY-----/gu),
     ],
     // プロジェクト / 内部 ID
     INTERNAL_ID: [
@@ -234,13 +247,53 @@
     ],
     // 電話 (日本)
     PHONE_NUMBER_JP: [
-      T("PHONE_NUMBER", /0\d{1,4}[-(]\d{1,4}[-)]\d{3,4}/gu),
+      // 区切りは「ハイフン統一」か「括弧で囲う」のどちらか。以前は
+      // [-(] と [-)] が独立していたため 03-1234)5678 が通っていた。
+      T("PHONE_NUMBER", /0\d{1,4}(?:-\d{1,4}-|\(\d{1,4}\))\d{3,4}/gu),
       T("PHONE_NUMBER", /\b0[789]0\d{8}\b/gu),
     ],
     // メール (寛容 — 新 gTLD 対応)
     EMAIL_ADDRESS: [T("EMAIL_ADDRESS", /\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,63}\b/gu)],
-    // カタカナ名 (ヒューリスティック)
-    KATAKANA_NAME: [T("KATAKANA_NAME", /[ァ-ヶー]{4,}/gu)],
+    // カタカナ名 — 文脈ゲート方式。
+    //
+    // 以前は /[ァ-ヶー]{4,}/ = 「4 文字以上のカタカナは人名」という
+    // 無条件ルールで、アプリケーション / インストール / ホルモン /
+    // ワクチン のような外来語を軒並み人名として拾っていた。
+    // blocklist.js で打ち消そうとしても、日本語の外来語は新語が無限に
+    // 増える開いた語彙なので、否定リストは原理的に追いつかない。
+    //
+    // そこで極性を反転し、「人名が置かれる文脈」という閉じた条件で
+    // 拾う。閉じたルールは開いた語彙に対して収束する。
+    // blocklist は残すが、この 3 ルールが捕らえた run にだけ効かせる
+    // (例: 「マネージャーさん」は (b) に当たるが blocklist が落とす)。
+    // 文脈の無い裸の言及は諦める — そこは ML (NER) の担当。
+    KATAKANA_NAME: [
+      // (a) 中黒を挟むフルネーム: マイケル・ジョーダン
+      T("KATAKANA_NAME", /[ァ-ヶー]{2,10}[・･][ァ-ヶー]{2,12}/gu),
+      // (b) 敬称・役職が後続: ジョンソン部長 / アクメさん
+      T(
+        "KATAKANA_NAME",
+        /[ァ-ヶー]{2,12}(?=\s*(?:さん|サン|様|さま|氏|くん|君|ちゃん|先生|殿|部長|課長|係長|社長|専務|常務|取締役|主任|本部長|支店長))/gu,
+      ),
+      // (c) 氏名を宣言する語が前置: 氏名: タナカタロウ
+      T(
+        "KATAKANA_NAME",
+        /(?<=(?:氏名|名前|本名|姓名|フルネーム|担当者?|申込者|契約者|お客様)\s*(?:は|[:：=＝])\s*)[ァ-ヶー]{2,12}/gu,
+      ),
+    ],
+    // 略称の企業参照 (A社 / 甲社)。
+    //
+    // A社・甲社はそれ自体が既に仮名なので、マスクしても privacy の
+    // 利得はほぼ無く、置換するとプロンプトが読みにくくなるだけ。
+    // それでも拾う理由は (i) 別の場所にある対応表と突き合わせると実名に
+    // 戻せる、(ii) 「甲社との協議」のような文が機密判定の材料になる、の
+    // 2 点。したがって severity は low に置き、マスクではなく提示に留める。
+    COMPANY_ABBREV: [
+      T(
+        "COMPANY_ABBREV",
+        /(?<![\p{Script=Han}\p{Script=Katakana}A-Za-z0-9])(?:[A-Za-zＡ-Ｚａ-ｚ]|甲|乙|丙|丁)社(?![\p{Script=Han}])/gu,
+      ),
+    ],
     // 業務文書系
     // ラベル語 (顧客番号 / 契約番号 …) の直後の区切りは optional。
     // 以前は \s*[:：=]\s* が必須だったため、日本語で自然な
@@ -307,7 +360,28 @@
     // pre-compiled regex を参照。dicts が null の場合 (依存解決失敗)
     // は黙ってスキップする。
     ...(dicts ? {
-      JP_SURNAME: [T("JP_SURNAME", dicts.JP_SURNAME_RE)],
+      JP_SURNAME: [
+        // 姓+名を 1 span にまとめる。敬称が後続するときだけ名まで伸ばす。
+        //
+        // 以前は姓しか当たらず「田中太郎さん」が「<JP_SURNAME_1>太郎さん」に
+        // なっていた。これはマスクしないより悪い — 残った「太郎」に対して
+        // 「ここは人名だ」と印を付けて読めるまま渡すことになる。
+        //
+        // 敬称リストに役職 (部長 等) と助詞 (は 等) を入れていないのは
+        // 意図的で、「は」を入れると「山田電機は好調」が人名になり、
+        // 「部長」を入れると役職まで名前に飲み込まれる。役職が続く
+        // 「田中部長」は下の素の JP_SURNAME_RE が「田中」で拾う。
+        T(
+          "JP_SURNAME",
+          new RegExp(
+            `(?:${dicts.JP_SURNAMES.join("|")})` +
+              "[\\p{Script=Han}\\p{Script=Katakana}ヶヵー]{1,4}" +
+              "(?=\\s*(?:さん|サン|様|さま|氏|くん|君|ちゃん|先生|殿|どの))",
+            "gu",
+          ),
+        ),
+        T("JP_SURNAME", dicts.JP_SURNAME_RE),
+      ],
       JP_PREFECTURE_DICT: [T("JP_PREFECTURE_DICT", dicts.JP_PREFECTURE_RE)],
       JP_DESIGNATED_CITY: [T("JP_DESIGNATED_CITY", dicts.JP_DESIGNATED_CITY_RE)],
       WORLD_COUNTRY: [

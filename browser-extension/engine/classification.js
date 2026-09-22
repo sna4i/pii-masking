@@ -23,6 +23,7 @@
     ORGANIZATION: "proper_noun",
     PROPER_NOUN_ORG: "proper_noun",
     COMPANY: "proper_noun",
+    COMPANY_ABBREV: "proper_noun",
     // ---- contact --------------------------------------------------------
     EMAIL_ADDRESS: "contact",
     PHONE_NUMBER: "contact",

@@ -33,6 +33,7 @@
     PROPER_NOUN_ORG: "medium",
     ORGANIZATION: "medium",
     COMPANY: "medium",
+    COMPANY_ABBREV: "low",
     EMPLOYEE_ID: "medium",
     MEMBER_ID: "medium",
     CUSTOMER_ID: "medium",
