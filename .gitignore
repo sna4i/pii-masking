@@ -27,3 +27,7 @@ dist/
 # 入るため、git add -A で巻き込むと GitHub の push が pre-receive で落ちる。
 tests/integration/.tmp-profile-*/
 .playwright-mcp/
+
+# Chrome に unpacked で読み込ませる作業用コピー。
+# browser-extension/scripts/sync-dev.sh が生成するので追跡しない。
+/dev/
